@@ -10,6 +10,17 @@
     #f2a900 0 12px,
     #0b0b0d 12px 24px
   );
+  background-size: 34px 34px;
+  animation: hazard-slide 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes hazard-slide {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 34px 0;
+  }
 }
 
 /* textura de concreto sutil no fundo */
