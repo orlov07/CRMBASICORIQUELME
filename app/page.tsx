@@ -148,7 +148,6 @@ export default function App() {
     }
     setModal({ tipo: "pedido" });
   };
-
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* ---------- Sidebar ---------- */}
