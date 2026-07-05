@@ -137,8 +137,7 @@ export default function App() {
 
   const novoPedido = () => {
     if (clientes.length === 0) {
-      setAba("clientes");
-      avisar("Cadastre um cliente primeiro");
+      setModal({ tipo: "aviso-pedido" });
       return;
     }
     if (produtos.length === 0) {
@@ -248,6 +247,26 @@ export default function App() {
           onSalvar={salvarPedido}
           onFechar={() => setModal(null)}
         />
+      )}
+      {modal?.tipo === "aviso-pedido" && (
+        <Modal titulo="Aviso" onFechar={() => setModal(null)}>
+          <p className="text-sm text-zinc-300 leading-6">
+            Primeiro voce precisa cadastrar o cliente na aba{" "}
+            <span className="text-white font-semibold">Clientes</span>. Depois disso, volte para{" "}
+            <span className="text-white font-semibold">Pedidos</span> para criar o pedido.
+          </p>
+          <div className="flex justify-end gap-2 mt-5">
+            <Btn variant="ghost" onClick={() => setModal(null)}>Fechar</Btn>
+            <Btn
+              onClick={() => {
+                setModal(null);
+                setAba("clientes");
+              }}
+            >
+              Ir para clientes
+            </Btn>
+          </div>
+        </Modal>
       )}
       {toast && (
         <div className="fixed bottom-5 right-5 bg-acc text-base font-disp uppercase text-sm px-4 py-2 shadow-lg z-50">
