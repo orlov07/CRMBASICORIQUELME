@@ -8,6 +8,15 @@ const KEY =
 
 export const configurado = !URL.includes("__");
 
+export const getSiteUrl = () => {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "http://localhost:3000";
+};
+
+export const getGoogleRedirectTo = () =>
+  process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_TO || getSiteUrl();
+
 export const supabase = createClient(
   configurado ? URL : "https://placeholder.supabase.co",
   configurado ? KEY : "placeholder"

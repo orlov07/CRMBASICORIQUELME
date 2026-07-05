@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { supabase, configurado } from "@/lib/supabase";
+import { supabase, configurado, getGoogleRedirectTo } from "@/lib/supabase";
 import {
   STATUS,
   TIPOS_CLIENTE,
@@ -48,12 +48,29 @@ export default function App() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [authPronta, setAuthPronta] = useState(false);
+  const [sessao, setSessao] = useState<any>(null);
   const [modal, setModal] = useState<any>(null);
   const [toast, setToast] = useState("");
 
   const avisar = (t: string) => {
     setToast(t);
     setTimeout(() => setToast(""), 2500);
+  };
+
+  const entrarComGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: getGoogleRedirectTo() },
+    });
+    if (error) avisar("Erro ao iniciar login com Google");
+  };
+
+  const sair = async () => {
+    await supabase.auth.signOut();
+    setModal(null);
+    setAba("painel");
+    avisar("Sessao encerrada");
   };
 
   const carregar = useCallback(async () => {
@@ -71,8 +88,40 @@ export default function App() {
   useEffect(() => {
     if (!configurado) {
       setCarregando(false);
+      setAuthPronta(true);
       return;
     }
+
+    let ativo = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!ativo) return;
+      setSessao(data.session);
+      setAuthPronta(true);
+      if (!data.session) setCarregando(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessao(session);
+      setAuthPronta(true);
+      if (!session) {
+        setClientes([]);
+        setPedidos([]);
+        setProdutos([]);
+        setCarregando(false);
+      }
+    });
+
+    return () => {
+      ativo = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!configurado || !sessao) return;
     carregar();
     const canal = supabase
       .channel("crmriq")
@@ -83,7 +132,7 @@ export default function App() {
     return () => {
       supabase.removeChannel(canal);
     };
-  }, [carregar]);
+  }, [carregar, sessao]);
 
   const nomeCliente = (id: string) =>
     clientes.find((c) => c.id === id)?.nome || "Cliente removido";
@@ -147,6 +196,40 @@ export default function App() {
     }
     setModal({ tipo: "pedido" });
   };
+
+  if (!authPronta || (configurado && sessao && carregando)) {
+    return <Spinner />;
+  }
+
+  if (configurado && !sessao) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-panel border border-line shadow-2xl">
+          <div className="hazard h-2 w-full" />
+          <div className="p-8">
+            <div className="font-disp text-3xl font-bold uppercase tracking-wide text-white">
+              Entrar
+            </div>
+            <p className="text-sm text-mut mt-3 leading-6">
+              Use sua conta do Google para acessar o CRM da fabrica e trabalhar com os dados compartilhados.
+            </p>
+            <div className="mt-6">
+              <Btn onClick={entrarComGoogle} className="w-full py-3">
+                Entrar com Google
+              </Btn>
+            </div>
+            <p className="text-xs text-zinc-500 mt-4">
+              Parametros: <code className="font-mono">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
+              <code className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>,{" "}
+              <code className="font-mono">NEXT_PUBLIC_SITE_URL</code> e{" "}
+              <code className="font-mono">NEXT_PUBLIC_GOOGLE_REDIRECT_TO</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* ---------- Sidebar ---------- */}
@@ -166,6 +249,14 @@ export default function App() {
               Fábrica de blocos
             </div>
           </div>
+        </div>
+        <div className="hidden md:block px-4 pb-3">
+          <div className="text-[11px] text-zinc-500 font-mono truncate">
+            {sessao?.user?.email}
+          </div>
+          <button onClick={sair} className="mt-2 text-xs text-mut hover:text-white underline">
+            Sair
+          </button>
         </div>
         <nav className="flex md:flex-col flex-1 md:px-2 overflow-x-auto scroll-slim">
           {NAV.map((n) => (
