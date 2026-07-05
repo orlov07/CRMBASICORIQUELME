@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* faixa de segurança — assinatura visual */
+.hazard {
+  background: repeating-linear-gradient(
+    -45deg,
+    #f2a900 0 12px,
+    #0b0b0d 12px 24px
+  );
+}
+
+/* textura de concreto sutil no fundo */
+body {
+  background-image: radial-gradient(#ffffff06 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+::selection {
+  background: #f2a900;
+  color: #0b0b0d;
+}
+
+input,
+select,
+textarea {
+  color-scheme: dark;
+}
+
+.scroll-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: #26262c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
