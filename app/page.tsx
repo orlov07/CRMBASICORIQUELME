@@ -249,7 +249,7 @@ export default function App() {
         />
       )}
       {modal?.tipo === "aviso-pedido" && (
-        <Modal titulo="Aviso" onFechar={() => setModal(null)}>
+        <Modal titulo="Aviso" onFechar={() => setModal(null)} centralizado>
           <p className="text-sm text-zinc-300 leading-6">
             Primeiro voce precisa cadastrar o cliente na aba{" "}
             <span className="text-white font-semibold">Clientes</span>. Depois disso, volte para{" "}

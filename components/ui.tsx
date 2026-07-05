@@ -64,14 +64,20 @@ export function Field({ label, children }: any) {
 export const inp =
   "w-full bg-panel2 border border-line focus:border-acc outline-none px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600";
 
-export function Modal({ titulo, children, onFechar }: any) {
+export function Modal({ titulo, children, onFechar, centralizado = false }: any) {
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-auto z-50"
+      className={
+        "fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center p-4 overflow-auto z-50 " +
+        (centralizado ? "items-center" : "items-start")
+      }
       onClick={onFechar}
     >
       <div
-        className="bg-panel border border-line w-full max-w-lg mt-10 shadow-2xl"
+        className={
+          "bg-panel border border-line w-full max-w-lg shadow-2xl " +
+          (centralizado ? "" : "mt-10")
+        }
         onClick={(e) => e.stopPropagation()}
       >
         <div className="hazard h-1 w-full" />
