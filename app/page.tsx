@@ -700,8 +700,11 @@ function Produtos({ produtos, recarregar, avisar }: any) {
   };
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="font-disp text-2xl font-bold uppercase tracking-wide mb-6">Produtos</h1>
+    <div className="max-w-4xl">
+      <div className="mb-6">
+        <h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Produtos</h1>
+        <p className="text-sm text-mut mt-1">Cadastre os blocos e mantenha os preços unitários atualizados.</p>
+      </div>
 
       <div className="bg-panel border border-line divide-y divide-line">
         {produtos.map((p: Produto) => {
@@ -712,7 +715,7 @@ function Produtos({ produtos, recarregar, avisar }: any) {
               <input
                 value={e.nome ?? p.nome}
                 onChange={(ev) => setEdits({ ...edits, [p.id]: { ...e, nome: ev.target.value } })}
-                className="flex-1 bg-transparent border border-transparent hover:border-line focus:border-acc outline-none px-2 py-1 text-sm"
+                className="flex-1 min-w-0 bg-transparent border border-transparent hover:border-line focus:border-acc outline-none px-2 py-1 text-sm"
               />
               <span className="text-mut text-xs font-mono">R$</span>
               <input
@@ -737,16 +740,16 @@ function Produtos({ produtos, recarregar, avisar }: any) {
           );
         })}
         {produtos.length === 0 && (
-          <div className="px-4 py-6 text-sm text-mut">Nenhum produto cadastrado ainda.</div>
+          <div className="px-5 py-7 text-sm text-mut">Nenhum produto cadastrado ainda. Cadastre o primeiro item no formulário abaixo.</div>
         )}
       </div>
 
-      <div className="flex gap-2 mt-4">
+      <div className="flex flex-col sm:flex-row gap-3 mt-4 bg-panel border border-line p-4">
         <input
           value={novo.nome}
           onChange={(e) => setNovo({ ...novo, nome: e.target.value })}
           placeholder="Novo bloco (ex: Bloco 14x19x29)"
-          className={inp + " flex-1"}
+          className={inp + " w-full sm:!w-auto flex-1"}
         />
         <input
           type="number"
@@ -754,9 +757,9 @@ function Produtos({ produtos, recarregar, avisar }: any) {
           value={novo.preco}
           onChange={(e) => setNovo({ ...novo, preco: e.target.value })}
           placeholder="Preço"
-          className={inp + " w-28 text-right font-mono"}
+          className={inp + " w-full sm:!w-32 text-right font-mono"}
         />
-        <Btn onClick={adicionar} disabled={!novo.nome.trim()}>
+        <Btn onClick={adicionar} disabled={!novo.nome.trim()} className="w-full sm:w-auto">
           Adicionar
         </Btn>
       </div>
