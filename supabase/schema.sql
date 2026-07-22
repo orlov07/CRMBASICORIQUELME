@@ -29,6 +29,11 @@ create table if not exists public.crmriq_pedidos (
   criado_em timestamptz not null default now()
 );
 
+-- Campos adicionados ao CRM operacional.
+alter table public.crmriq_produtos add column if not exists estoque_atual integer not null default 0 check (estoque_atual >= 0);
+alter table public.crmriq_produtos add column if not exists estoque_minimo integer not null default 0 check (estoque_minimo >= 0);
+alter table public.crmriq_pedidos add column if not exists comprovante_path text;
+
 -- Impede que apagar um cliente apague todos os seus pedidos em cascata.
 alter table public.crmriq_pedidos drop constraint if exists crmriq_pedidos_cliente_id_fkey;
 alter table public.crmriq_pedidos
@@ -56,6 +61,11 @@ returns boolean language sql stable
 as $$
   select lower(coalesce(auth.jwt() ->> 'email', '')) = 'igoraguiarviana@gmail.com';
 $$;
+
+-- Bucket privado para fotos e PDFs de comprovantes de entrega.
+insert into storage.buckets (id, name, public)
+values ('crmriq-comprovantes', 'crmriq-comprovantes', false)
+on conflict (id) do nothing;
 
 create table if not exists public.crmriq_auditoria (
   id uuid primary key default gen_random_uuid(),
@@ -144,6 +154,20 @@ create policy "Autorizados criam pedidos" on public.crmriq_pedidos for insert to
 create policy "Autorizados alteram pedidos" on public.crmriq_pedidos for update to authenticated using (public.crmriq_eh_autorizado()) with check (public.crmriq_eh_autorizado());
 create policy "Administrador exclui pedidos" on public.crmriq_pedidos for delete to authenticated using (public.crmriq_eh_administrador());
 create policy "Administrador le auditoria" on public.crmriq_auditoria for select to authenticated using (public.crmriq_eh_administrador());
+
+drop policy if exists "Autorizados leem comprovantes" on storage.objects;
+drop policy if exists "Autorizados enviam comprovantes" on storage.objects;
+drop policy if exists "Autorizados atualizam comprovantes" on storage.objects;
+drop policy if exists "Administrador exclui comprovantes" on storage.objects;
+create policy "Autorizados leem comprovantes" on storage.objects for select to authenticated
+  using (bucket_id = 'crmriq-comprovantes' and public.crmriq_eh_autorizado());
+create policy "Autorizados enviam comprovantes" on storage.objects for insert to authenticated
+  with check (bucket_id = 'crmriq-comprovantes' and public.crmriq_eh_autorizado());
+create policy "Autorizados atualizam comprovantes" on storage.objects for update to authenticated
+  using (bucket_id = 'crmriq-comprovantes' and public.crmriq_eh_autorizado())
+  with check (bucket_id = 'crmriq-comprovantes' and public.crmriq_eh_autorizado());
+create policy "Administrador exclui comprovantes" on storage.objects for delete to authenticated
+  using (bucket_id = 'crmriq-comprovantes' and public.crmriq_eh_administrador());
 
 -- Atualizacao em tempo real entre a web e o aplicativo desktop.
 do $$

@@ -15,7 +15,7 @@ import {
   Spinner,
 } from "@/components/ui";
 
-type Produto = { id: string; nome: string; preco: number };
+type Produto = { id: string; nome: string; preco: number; estoque_atual: number; estoque_minimo: number };
 type Cliente = {
   id: string;
   nome: string;
@@ -33,9 +33,13 @@ type Pedido = {
   data_entrega: string | null;
   total: number;
   criado_em: string;
+  comprovante_path?: string | null;
 };
 
 const NAV = [
+  { id: "estoque", label: "Estoque", icone: "▤" },
+  { id: "producao", label: "Produção", icone: "◫" },
+  { id: "relatorios", label: "Relatórios", icone: "▥" },
   { id: "agenda", label: "Agenda", icone: "◫" },
   { id: "painel", label: "Painel", icone: "▦" },
   { id: "clientes", label: "Clientes", icone: "◉" },
@@ -203,6 +207,37 @@ export default function App() {
     popup.print();
   };
 
+  const enviarComprovante = async (pedido: Pedido, arquivo: File) => {
+    if (arquivo.size > 10 * 1024 * 1024) {
+      avisar("O comprovante deve ter no máximo 10 MB");
+      return;
+    }
+    const extensao = arquivo.name.split(".").pop()?.toLowerCase() || "arquivo";
+    const caminho = `${pedido.id}/${crypto.randomUUID()}.${extensao}`;
+    const { error: erroUpload } = await supabase.storage.from("crmriq-comprovantes").upload(caminho, arquivo, { contentType: arquivo.type });
+    if (erroUpload) {
+      avisar("Não foi possível enviar o comprovante");
+      return;
+    }
+    const { error: erroPedido } = await supabase.from("crmriq_pedidos").update({ comprovante_path: caminho }).eq("id", pedido.id);
+    if (erroPedido) {
+      avisar("Comprovante enviado, mas não foi vinculado ao pedido");
+      return;
+    }
+    avisar("Comprovante anexado");
+    carregar();
+  };
+
+  const verComprovante = async (pedido: Pedido) => {
+    if (!pedido.comprovante_path) return;
+    const { data, error } = await supabase.storage.from("crmriq-comprovantes").createSignedUrl(pedido.comprovante_path, 60 * 10);
+    if (error || !data?.signedUrl) {
+      avisar("Não foi possível abrir o comprovante");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
   // ---------- ações ----------
   const salvarCliente = async (f: any) => {
     if (f.id) {
@@ -346,6 +381,7 @@ export default function App() {
             </button>
           )}
           <div className="text-[10px] uppercase tracking-widest text-zinc-600">Conta logada</div>
+          <div className="mt-1 text-[10px] uppercase tracking-widest text-acc">{podeExcluir ? "Administrador" : "Operador"}</div>
           <div className="mt-1 text-[11px] text-zinc-400 truncate" title={sessao?.user?.email || ""}>
             {sessao?.user?.email}
           </div>
@@ -366,7 +402,7 @@ export default function App() {
         ) : (
           <div key={aba} className="page-enter">
             {aba === "painel" && (
-              <Painel clientes={clientes} pedidos={pedidos} nomeCliente={nomeCliente} />
+              <Painel clientes={clientes} pedidos={pedidos} nomeCliente={nomeCliente} onAgenda={() => setAba("agenda")} />
             )}
             {aba === "clientes" && (
               <Clientes
@@ -391,6 +427,8 @@ export default function App() {
                 podeExcluir={podeExcluir}
                 onWhatsApp={enviarWhatsApp}
                 onImprimir={imprimirPedido}
+                onComprovante={enviarComprovante}
+                onVerComprovante={verComprovante}
               />
             )}
             {aba === "agenda" && (
@@ -399,6 +437,9 @@ export default function App() {
             {aba === "produtos" && (
               <Produtos produtos={produtos} recarregar={carregar} avisar={avisar} podeExcluir={podeExcluir} />
             )}
+            {aba === "estoque" && <Estoque produtos={produtos} recarregar={carregar} avisar={avisar} />}
+            {aba === "producao" && <Producao pedidos={pedidos} produtos={produtos} />}
+            {aba === "relatorios" && <Relatorios pedidos={pedidos} produtos={produtos} nomeCliente={nomeCliente} />}
             {aba === "auditoria" && podeExcluir && <Auditoria />}
           </div>
         )}
@@ -448,7 +489,7 @@ export default function App() {
 }
 
 // ================= Painel =================
-function Painel({ clientes, pedidos, nomeCliente }: any) {
+function Painel({ clientes, pedidos, nomeCliente, onAgenda }: any) {
   const agora = new Date();
   const doMes = (t: string) => {
     const d = new Date(t);
@@ -473,10 +514,25 @@ function Painel({ clientes, pedidos, nomeCliente }: any) {
   ];
 
   const totalPed = pedidos.length || 1;
+  const inicioHoje = new Date();
+  inicioHoje.setHours(0, 0, 0, 0);
+  const emDoisDias = new Date(inicioHoje);
+  emDoisDias.setDate(emDoisDias.getDate() + 2);
+  const entregasAtrasadas = pedidos.filter((p: Pedido) => p.status !== "entregue" && p.data_entrega && new Date(p.data_entrega + "T12:00") < inicioHoje);
+  const entregasProximas = pedidos.filter((p: Pedido) => p.status !== "entregue" && p.data_entrega && new Date(p.data_entrega + "T12:00") >= inicioHoje && new Date(p.data_entrega + "T12:00") <= emDoisDias);
+  const orcamentosAntigos = pedidos.filter((p: Pedido) => p.status === "orcamento" && (Date.now() - new Date(p.criado_em).getTime()) > 7 * 86400000);
 
   return (
     <div>
       <h1 className="font-disp text-2xl font-bold uppercase tracking-wide mb-6">Painel</h1>
+
+      {(entregasAtrasadas.length > 0 || entregasProximas.length > 0 || orcamentosAntigos.length > 0) && (
+        <div className="grid gap-2 mb-5">
+          {entregasAtrasadas.length > 0 && <button onClick={onAgenda} className="text-left border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{entregasAtrasadas.length} entrega(s) atrasada(s). Ver agenda.</button>}
+          {entregasProximas.length > 0 && <button onClick={onAgenda} className="text-left border border-acc/40 bg-acc/10 px-4 py-3 text-sm text-amber-100">{entregasProximas.length} entrega(s) prevista(s) para os próximos 2 dias.</button>}
+          {orcamentosAntigos.length > 0 && <div className="border border-line bg-panel px-4 py-3 text-sm text-zinc-300">{orcamentosAntigos.length} orçamento(s) aguardando resposta há mais de 7 dias.</div>}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map(({ label, valor, moeda }, i) => (
@@ -696,6 +752,99 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir, podeExcluir 
   );
 }
 
+// ================= Estoque =================
+function Estoque({ produtos, recarregar, avisar }: any) {
+  const [edits, setEdits] = useState<Record<string, { atual?: string; minimo?: string }>>({});
+
+  const salvar = async (produto: Produto) => {
+    const edit = edits[produto.id];
+    if (!edit) return;
+    const { error } = await supabase.from("crmriq_produtos").update({
+      estoque_atual: Math.max(0, Number(edit.atual ?? produto.estoque_atual) || 0),
+      estoque_minimo: Math.max(0, Number(edit.minimo ?? produto.estoque_minimo) || 0),
+    }).eq("id", produto.id);
+    if (error) {
+      avisar("Não foi possível atualizar o estoque");
+      return;
+    }
+    setEdits((atual: any) => {
+      const proximo = { ...atual };
+      delete proximo[produto.id];
+      return proximo;
+    });
+    avisar("Estoque atualizado");
+    recarregar();
+  };
+
+  return (
+    <div className="max-w-4xl">
+      <div className="mb-6">
+        <h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Estoque</h1>
+        <p className="text-sm text-mut mt-1">Controle manual dos blocos prontos disponíveis para entrega.</p>
+      </div>
+      {produtos.length === 0 ? <Empty texto="Cadastre produtos para começar o controle de estoque." /> : (
+        <div className="bg-panel border border-line divide-y divide-line">
+          {produtos.map((produto: Produto, i: number) => {
+            const edit = edits[produto.id] || {};
+            const atual = Number(edit.atual ?? produto.estoque_atual ?? 0);
+            const minimo = Number(edit.minimo ?? produto.estoque_minimo ?? 0);
+            const baixo = atual <= minimo;
+            const alterado = edit.atual !== undefined || edit.minimo !== undefined;
+            return (
+              <div key={produto.id} className="card-enter grid grid-cols-[minmax(0,1fr)_5rem_5rem_auto] sm:grid-cols-[minmax(0,1fr)_8rem_8rem_auto] items-center gap-3 px-4 py-3" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
+                <div className="min-w-0"><div className="text-sm text-white truncate">{produto.nome}</div><div className={(baixo ? "text-red-300" : "text-zinc-500") + " text-xs mt-1"}>{baixo ? "Estoque baixo" : "Estoque regular"}</div></div>
+                <label className="text-xs text-mut">Atual<input type="number" min="0" value={edit.atual ?? produto.estoque_atual ?? 0} onChange={(e) => setEdits({ ...edits, [produto.id]: { ...edit, atual: e.target.value } })} className={inp + " mt-1 text-right font-mono"} /></label>
+                <label className="text-xs text-mut">Mínimo<input type="number" min="0" value={edit.minimo ?? produto.estoque_minimo ?? 0} onChange={(e) => setEdits({ ...edits, [produto.id]: { ...edit, minimo: e.target.value } })} className={inp + " mt-1 text-right font-mono"} /></label>
+                {alterado && <button onClick={() => salvar(produto)} className="text-xs font-disp uppercase text-acc hover:text-amber-300">Salvar</button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ================= Produção =================
+function Producao({ pedidos, produtos }: any) {
+  const necessidades = new Map<string, number>();
+  pedidos.filter((pedido: Pedido) => pedido.status === "confirmado" || pedido.status === "producao").forEach((pedido: Pedido) => {
+    pedido.itens.forEach((item) => necessidades.set(item.produto_id, (necessidades.get(item.produto_id) || 0) + Number(item.qtd || 0)));
+  });
+  const linhas = [...necessidades.entries()].map(([produtoId, quantidade]) => ({ produto: produtos.find((p: Produto) => p.id === produtoId), quantidade })).filter((linha) => linha.produto);
+
+  return (
+    <div className="max-w-4xl">
+      <div className="mb-6"><h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Produção</h1><p className="text-sm text-mut mt-1">Necessidade baseada nos pedidos confirmados e em produção.</p></div>
+      {linhas.length === 0 ? <Empty texto="Nenhum bloco pendente de produção." /> : (
+        <div className="bg-panel border border-line divide-y divide-line">
+          {linhas.map((linha: any, i: number) => {
+            const falta = Math.max(0, linha.quantidade - Number(linha.produto.estoque_atual || 0));
+            return <div key={linha.produto.id} className="card-enter flex items-center justify-between gap-4 px-4 py-4" style={{ animationDelay: `${i * 55}ms` }}><div><div className="text-white text-sm">{linha.produto.nome}</div><div className="text-xs text-mut mt-1">Estoque atual: {linha.produto.estoque_atual || 0}</div></div><div className="text-right"><div className="font-mono text-lg text-white">{linha.quantidade} un.</div><div className={(falta > 0 ? "text-red-300" : "text-emerald-300") + " text-xs mt-1"}>{falta > 0 ? `Produzir ${falta}` : "Estoque suficiente"}</div></div></div>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ================= Relatórios =================
+function Relatorios({ pedidos, produtos, nomeCliente }: any) {
+  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7));
+  const lista = pedidos.filter((pedido: Pedido) => pedido.criado_em.slice(0, 7) === mes);
+  const entregues = lista.filter((pedido: Pedido) => pedido.status === "entregue");
+  const faturado = entregues.reduce((s: number, pedido: Pedido) => s + Number(pedido.total), 0);
+  const aberto = lista.filter((pedido: Pedido) => pedido.status !== "entregue").reduce((s: number, pedido: Pedido) => s + Number(pedido.total), 0);
+  const exportar = (nome: string, cabecalho: string[], linhas: (string | number)[][]) => {
+    const escapar = (valor: string | number) => `"${String(valor ?? "").replace(/"/g, '""')}"`;
+    const csv = [cabecalho, ...linhas].map((linha) => linha.map(escapar).join(";")).join("\n");
+    const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = nome; link.click(); URL.revokeObjectURL(url);
+  };
+
+  return <div className="max-w-5xl"><div className="flex items-end justify-between gap-4 mb-6 flex-wrap"><div><h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Relatórios</h1><p className="text-sm text-mut mt-1">Resultados, pedidos e exportação para Excel.</p></div><label className="text-xs text-mut">Mês<input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={inp + " mt-1"} /></label></div><div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><div className="bg-panel border border-line p-4"><div className="text-xs text-mut uppercase">Faturado</div><div className="font-mono text-2xl mt-2">{brl(faturado)}</div></div><div className="bg-panel border border-line p-4"><div className="text-xs text-mut uppercase">Em aberto</div><div className="font-mono text-2xl mt-2">{brl(aberto)}</div></div><div className="bg-panel border border-line p-4"><div className="text-xs text-mut uppercase">Pedidos</div><div className="font-mono text-2xl mt-2">{lista.length}</div></div></div><div className="flex gap-3 mt-5 flex-wrap"><Btn variant="ghost" onClick={() => exportar(`pedidos-${mes}.csv`, ["Cliente", "Status", "Entrega", "Total"], lista.map((p: Pedido) => [nomeCliente(p.cliente_id), p.status, p.data_entrega || "", Number(p.total)]))}>Exportar pedidos</Btn><Btn variant="ghost" onClick={() => exportar("produtos.csv", ["Produto", "Preço", "Estoque"], produtos.map((p: Produto) => [p.nome, p.preco, p.estoque_atual || 0]))}>Exportar produtos</Btn></div></div>;
+}
+
 // ================= Agenda =================
 function Agenda({ pedidos, nomeCliente, onNovo, onEditar }: any) {
   const entregas = pedidos
@@ -747,10 +896,17 @@ function Agenda({ pedidos, nomeCliente, onNovo, onEditar }: any) {
 }
 
 // ================= Pedidos =================
-function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, onStatus, onExcluir, podeExcluir, onWhatsApp, onImprimir }: any) {
+function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, onStatus, onExcluir, podeExcluir, onWhatsApp, onImprimir, onComprovante, onVerComprovante }: any) {
   const [filtro, setFiltro] = useState("todos");
+  const [busca, setBusca] = useState("");
+  const [inicio, setInicio] = useState("");
+  const [fim, setFim] = useState("");
   const [confirmar, setConfirmar] = useState<string | null>(null);
-  const lista = pedidos.filter((p: Pedido) => filtro === "todos" || p.status === filtro);
+  const lista = pedidos.filter((p: Pedido) => {
+    const data = p.data_entrega || p.criado_em.slice(0, 10);
+    const correspondeBusca = (nomeCliente(p.cliente_id) + " " + p.status).toLowerCase().includes(busca.toLowerCase());
+    return (filtro === "todos" || p.status === filtro) && correspondeBusca && (!inicio || data >= inicio) && (!fim || data <= fim);
+  });
   const podeCriarPedido = clientes.length > 0;
   const etapa = STATUS.find((s) => s.id === filtro);
   const statusInicial = etapa?.id || "orcamento";
@@ -780,6 +936,12 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
             {s.label}
           </button>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_10rem_10rem] gap-2 mb-5">
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por cliente ou status" className={inp} />
+        <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} className={inp} title="Data inicial" />
+        <input type="date" value={fim} onChange={(e) => setFim(e.target.value)} className={inp} title="Data final" />
       </div>
 
       {!podeCriarPedido ? (
@@ -848,6 +1010,11 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
                     <button onClick={() => onWhatsApp(p)} className="text-emerald-400 hover:text-emerald-300 underline">
                       WhatsApp
                     </button>
+                    <label className="text-sky-300 hover:text-sky-200 underline cursor-pointer">
+                      Anexar entrega
+                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const arquivo = e.target.files?.[0]; if (arquivo) onComprovante(p, arquivo); e.currentTarget.value = ""; }} />
+                    </label>
+                    {p.comprovante_path && <button onClick={() => onVerComprovante(p)} className="text-sky-300 hover:text-sky-200 underline">Ver comprovante</button>}
                     <button onClick={() => onEditar(p)} className="text-mut hover:text-white underline">
                       Editar
                     </button>
