@@ -271,6 +271,17 @@ export default function App() {
           ))}
         </nav>
         <div className="hidden md:block px-4 py-4 font-mono">
+          {podeExcluir && (
+            <button
+              onClick={() => setAba("auditoria")}
+              className={
+                "w-full text-left mb-4 border-l-2 px-3 py-2 text-[11px] uppercase tracking-widest transition-colors " +
+                (aba === "auditoria" ? "border-acc bg-panel2 text-white" : "border-transparent text-mut hover:text-white")
+              }
+            >
+              ◫ Auditoria
+            </button>
+          )}
           <div className="text-[10px] uppercase tracking-widest text-zinc-600">Conta logada</div>
           <div className="mt-1 text-[11px] text-zinc-400 truncate" title={sessao?.user?.email || ""}>
             {sessao?.user?.email}
@@ -320,6 +331,7 @@ export default function App() {
             {aba === "produtos" && (
               <Produtos produtos={produtos} recarregar={carregar} avisar={avisar} podeExcluir={podeExcluir} />
             )}
+            {aba === "auditoria" && podeExcluir && <Auditoria />}
           </>
         )}
       </main>
@@ -456,6 +468,80 @@ function Painel({ clientes, pedidos, nomeCliente }: any) {
 }
 
 // ================= Clientes =================
+function Auditoria() {
+  const [registros, setRegistros] = useState<any[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
+
+  const carregarAuditoria = useCallback(async () => {
+    setCarregando(true);
+    setErro("");
+    const { data, error } = await supabase
+      .from("crmriq_auditoria")
+      .select("*")
+      .order("criado_em", { ascending: false })
+      .limit(100);
+    if (error) setErro("Não foi possível carregar a auditoria.");
+    setRegistros(data || []);
+    setCarregando(false);
+  }, []);
+
+  useEffect(() => {
+    carregarAuditoria();
+  }, [carregarAuditoria]);
+
+  const nomes: Record<string, string> = {
+    crmriq_clientes: "Cliente",
+    crmriq_produtos: "Produto",
+    crmriq_pedidos: "Pedido",
+  };
+  const acoes: Record<string, string> = { insert: "Criou", update: "Alterou", delete: "Excluiu" };
+
+  return (
+    <div className="max-w-4xl">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <div>
+          <h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Auditoria</h1>
+          <p className="text-sm text-mut mt-1">Últimas 100 ações registradas no CRM.</p>
+        </div>
+        <Btn variant="ghost" onClick={carregarAuditoria}>Atualizar</Btn>
+      </div>
+
+      {carregando ? (
+        <Spinner />
+      ) : erro ? (
+        <div className="border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{erro}</div>
+      ) : registros.length === 0 ? (
+        <Empty texto="Nenhuma ação foi registrada desde a ativação da auditoria." />
+      ) : (
+        <div className="bg-panel border border-line divide-y divide-line">
+          {registros.map((registro) => {
+            return (
+              <details key={registro.id} className="group px-4 py-3">
+                <summary className="cursor-pointer list-none flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm text-white">
+                      <span className="font-disp uppercase text-acc">{acoes[registro.acao] || registro.acao}</span>{" "}
+                      {nomes[registro.entidade] || registro.entidade}
+                    </div>
+                    <div className="mt-1 text-xs font-mono text-mut">{registro.usuario_email || "Usuário não identificado"}</div>
+                  </div>
+                  <time className="shrink-0 text-xs text-zinc-500 font-mono">
+                    {new Date(registro.criado_em).toLocaleString("pt-BR")}
+                  </time>
+                </summary>
+                <pre className="mt-3 max-h-64 overflow-auto bg-panel2 border border-line p-3 text-xs text-zinc-300 font-mono whitespace-pre-wrap">
+                  {JSON.stringify({ antes: registro.antes, depois: registro.depois }, null, 2)}
+                </pre>
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir, podeExcluir }: any) {
   const [busca, setBusca] = useState("");
   const [confirmar, setConfirmar] = useState<string | null>(null);
