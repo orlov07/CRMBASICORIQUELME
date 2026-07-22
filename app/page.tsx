@@ -424,7 +424,7 @@ export default function App() {
       </nav>
 
       {/* ---------- Conteúdo ---------- */}
-      <main className="flex-1 min-w-0 px-4 md:px-8 pt-20 pb-24 md:py-6 md:h-screen md:overflow-y-auto md:overscroll-contain scroll-slim">
+      <main className="flex-1 min-w-0 px-4 md:px-8 pt-20 pb-24 md:pt-0 md:pb-6 md:h-screen md:overflow-y-auto md:overscroll-contain scroll-slim">
         <div className="hidden md:flex sticky top-0 z-20 -mx-2 px-2 py-3 mb-4 bg-base border-b border-line shadow-[0_8px_14px_#0b0b0d] items-center justify-between">
           <div><div className="text-[10px] uppercase tracking-widest text-zinc-500">Gestão operacional</div><div className="font-disp text-lg uppercase text-white">{tituloAba}</div></div>
           <div className="text-xs font-mono text-mut">{new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}</div>
