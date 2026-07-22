@@ -45,7 +45,10 @@ const NAV = [
   { id: "clientes", label: "Clientes", icone: "◉" },
   { id: "pedidos", label: "Pedidos", icone: "▤" },
   { id: "produtos", label: "Produtos", icone: "▣" },
-];
+].sort((a, b) => {
+  const ordem = ["painel", "clientes", "pedidos", "agenda", "estoque", "producao", "produtos", "relatorios"];
+  return ordem.indexOf(a.id) - ordem.indexOf(b.id);
+});
 
 const EMAIL_ADMINISTRADOR = "igoraguiarviana@gmail.com";
 
