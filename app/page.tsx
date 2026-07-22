@@ -402,7 +402,7 @@ export default function App() {
         ) : (
           <div key={aba} className="page-enter">
             {aba === "painel" && (
-              <Painel clientes={clientes} pedidos={pedidos} nomeCliente={nomeCliente} onAgenda={() => setAba("agenda")} />
+              <Painel clientes={clientes} pedidos={pedidos} produtos={produtos} nomeCliente={nomeCliente} onAgenda={() => setAba("agenda")} />
             )}
             {aba === "clientes" && (
               <Clientes
@@ -489,7 +489,7 @@ export default function App() {
 }
 
 // ================= Painel =================
-function Painel({ clientes, pedidos, nomeCliente, onAgenda }: any) {
+function Painel({ clientes, pedidos, produtos, nomeCliente, onAgenda }: any) {
   const agora = new Date();
   const doMes = (t: string) => {
     const d = new Date(t);
@@ -497,6 +497,9 @@ function Painel({ clientes, pedidos, nomeCliente, onAgenda }: any) {
   };
   const fatMes = pedidos
     .filter((p: Pedido) => p.status === "entregue" && doMes(p.criado_em))
+    .reduce((s: number, p: Pedido) => s + Number(p.total), 0);
+  const faturamentoTotal = pedidos
+    .filter((p: Pedido) => p.status === "entregue")
     .reduce((s: number, p: Pedido) => s + Number(p.total), 0);
 
   const porStatus = (id: string) => pedidos.filter((p: Pedido) => p.status === id).length;
@@ -511,6 +514,8 @@ function Painel({ clientes, pedidos, nomeCliente, onAgenda }: any) {
     { label: "Orçamentos abertos", valor: porStatus("orcamento") },
     { label: "Em produção", valor: porStatus("confirmado") + porStatus("producao") },
     { label: "Faturado no mês", valor: fatMes, moeda: true },
+    { label: "Pedidos no total", valor: pedidos.length },
+    { label: "Faturamento total", valor: faturamentoTotal, moeda: true },
   ];
 
   const totalPed = pedidos.length || 1;
@@ -521,6 +526,17 @@ function Painel({ clientes, pedidos, nomeCliente, onAgenda }: any) {
   const entregasAtrasadas = pedidos.filter((p: Pedido) => p.status !== "entregue" && p.data_entrega && new Date(p.data_entrega + "T12:00") < inicioHoje);
   const entregasProximas = pedidos.filter((p: Pedido) => p.status !== "entregue" && p.data_entrega && new Date(p.data_entrega + "T12:00") >= inicioHoje && new Date(p.data_entrega + "T12:00") <= emDoisDias);
   const orcamentosAntigos = pedidos.filter((p: Pedido) => p.status === "orcamento" && (Date.now() - new Date(p.criado_em).getTime()) > 7 * 86400000);
+  const estoqueCritico = produtos.filter((produto: Produto) => Number(produto.estoque_atual || 0) <= Number(produto.estoque_minimo || 0));
+  const producaoPendente = pedidos
+    .filter((pedido: Pedido) => pedido.status === "confirmado" || pedido.status === "producao")
+    .reduce((s: number, pedido: Pedido) => s + pedido.itens.reduce((subtotal, item) => subtotal + Number(item.qtd || 0), 0), 0);
+  const meses = Array.from({ length: 6 }, (_, indice) => {
+    const data = new Date(agora.getFullYear(), agora.getMonth() - (5 - indice), 1);
+    const valor = pedidos.filter((pedido: Pedido) => pedido.status === "entregue" && new Date(pedido.criado_em).getMonth() === data.getMonth() && new Date(pedido.criado_em).getFullYear() === data.getFullYear()).reduce((s: number, pedido: Pedido) => s + Number(pedido.total), 0);
+    return { label: data.toLocaleDateString("pt-BR", { month: "short" }).replace(".", ""), valor };
+  });
+  const maiorMes = Math.max(...meses.map((mes) => mes.valor), 1);
+  const clientesRanking = clientes.map((cliente: Cliente) => ({ cliente, total: pedidos.filter((pedido: Pedido) => pedido.cliente_id === cliente.id).reduce((s: number, pedido: Pedido) => s + Number(pedido.total), 0) })).filter((linha) => linha.total > 0).sort((a, b) => b.total - a.total).slice(0, 5);
 
   return (
     <div>
@@ -534,7 +550,7 @@ function Painel({ clientes, pedidos, nomeCliente, onAgenda }: any) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {stats.map(({ label, valor, moeda }, i) => (
           <div key={label} className="bg-panel border border-line p-4 relative overflow-hidden card-enter" style={{ animationDelay: `${i * 70}ms` }}>
             <div className="absolute top-0 left-0 w-8 h-0.5 bg-acc" />
@@ -542,6 +558,31 @@ function Painel({ clientes, pedidos, nomeCliente, onAgenda }: any) {
             <div className="font-mono text-2xl mt-2 text-white"><NumeroAnimado valor={valor} moeda={moeda} /></div>
           </div>
         ))}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4 mt-8">
+        <div className="bg-panel border border-line p-4">
+          <div className="flex items-center justify-between mb-5"><h2 className="font-disp uppercase tracking-wide text-mut text-sm">Faturamento · últimos 6 meses</h2><span className="text-xs font-mono text-acc">{brl(faturamentoTotal)}</span></div>
+          <div className="h-40 flex items-end gap-3">
+            {meses.map((mes) => <div key={mes.label} className="flex-1 min-w-0 h-full flex flex-col justify-end"><div className="w-full bg-acc/80 hover:bg-acc transition-colors" style={{ height: `${Math.max((mes.valor / maiorMes) * 100, mes.valor > 0 ? 6 : 1)}%` }} title={`${mes.label}: ${brl(mes.valor)}`} /><div className="text-center text-[10px] text-mut uppercase mt-2">{mes.label}</div></div>)}
+          </div>
+        </div>
+        <div className="bg-panel border border-line p-4">
+          <h2 className="font-disp uppercase tracking-wide text-mut text-sm mb-5">Resumo operacional</h2>
+          <div className="grid grid-cols-2 gap-3"><div className="border border-line bg-panel2 p-3"><div className="text-xs text-mut">Produção pendente</div><div className="font-mono text-xl text-white mt-2">{producaoPendente} un.</div></div><div className={(estoqueCritico.length > 0 ? "border-red-500/40" : "border-line") + " border bg-panel2 p-3"}><div className="text-xs text-mut">Estoque crítico</div><div className={(estoqueCritico.length > 0 ? "text-red-300" : "text-emerald-300") + " font-mono text-xl mt-2"}>{estoqueCritico.length}</div></div></div>
+          <div className="mt-4 text-xs text-mut">{estoqueCritico.length > 0 ? `Atenção: ${estoqueCritico.map((produto: Produto) => produto.nome).join(", ")}` : "Todos os produtos estão acima do estoque mínimo."}</div>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4 mt-4">
+        <div className="bg-panel border border-line p-4">
+          <h2 className="font-disp uppercase tracking-wide text-mut text-sm mb-4">Melhores clientes</h2>
+          {clientesRanking.length === 0 ? <p className="text-sm text-mut">Ainda não há vendas registradas.</p> : <div className="space-y-3">{clientesRanking.map((linha, indice) => <div key={linha.cliente.id} className="flex items-center gap-3"><span className="font-mono text-acc w-5">{indice + 1}</span><span className="flex-1 text-sm text-zinc-200 truncate">{linha.cliente.nome}</span><span className="font-mono text-sm text-white">{brl(linha.total)}</span></div>)}</div>}
+        </div>
+        <div className="bg-panel border border-line p-4">
+          <h2 className="font-disp uppercase tracking-wide text-mut text-sm mb-4">Visão rápida</h2>
+          <div className="space-y-3 text-sm"><div className="flex justify-between"><span className="text-mut">Pedidos entregues</span><span className="font-mono">{porStatus("entregue")}</span></div><div className="flex justify-between"><span className="text-mut">Orçamentos em aberto</span><span className="font-mono">{porStatus("orcamento")}</span></div><div className="flex justify-between"><span className="text-mut">Entregas próximas</span><span className="font-mono">{entregasProximas.length}</span></div><div className="flex justify-between"><span className="text-mut">Clientes ativos</span><span className="font-mono">{clientesRanking.length}</span></div></div>
+        </div>
       </div>
 
       {/* pipeline */}
