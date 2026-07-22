@@ -1,11 +1,16 @@
 {
   "name": "crm-basico-riquelme",
   "version": "1.0.0",
+  "description": "CRM da Fabrica de Blocos Riquelme, para web e Windows.",
+  "author": "Riquelme Fabrica de Blocos",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "desktop:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "desktop:prepare": "node electron/prepare-standalone.cjs",
+    "desktop:build": "npm run build && npm run desktop:prepare && electron-builder --win"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -17,9 +22,29 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "autoprefixer": "^10.4.19",
+    "concurrently": "^10.0.3",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "postcss": "8.5.16",
     "tailwindcss": "^3.4.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.1.0"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.riquelme.fabricadeblocos",
+    "productName": "CRM Riquelme",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      ".next/standalone/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
   },
   "overrides": {
     "postcss": "8.5.16"

@@ -251,10 +251,7 @@ export default function App() {
           </div>
         </div>
         <div className="hidden md:block px-4 pb-3">
-          <div className="text-[11px] text-zinc-500 font-mono truncate">
-            {sessao?.user?.email}
-          </div>
-          <button onClick={sair} className="mt-2 text-xs text-mut hover:text-white underline">
+          <button onClick={sair} className="text-xs text-mut hover:text-white underline">
             Sair
           </button>
         </div>
@@ -275,10 +272,11 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="hidden md:block px-4 py-4 text-[11px] text-zinc-600 font-mono">
-          dados compartilhados
-          <br />
-          entre todos os usuários
+        <div className="hidden md:block px-4 py-4 font-mono">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-600">Conta logada</div>
+          <div className="mt-1 text-[11px] text-zinc-400 truncate" title={sessao?.user?.email || ""}>
+            {sessao?.user?.email}
+          </div>
         </div>
       </aside>
 
