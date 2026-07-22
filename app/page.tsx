@@ -44,6 +44,29 @@ const NAV = [
 
 const EMAIL_ADMINISTRADOR = "igoraguiarviana@gmail.com";
 
+function NumeroAnimado({ valor, moeda = false }: { valor: number; moeda?: boolean }) {
+  const [atual, setAtual] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setAtual(valor);
+      return;
+    }
+
+    const inicio = performance.now();
+    let quadro = 0;
+    const animar = (agora: number) => {
+      const progresso = Math.min((agora - inicio) / 500, 1);
+      setAtual(valor * (1 - Math.pow(1 - progresso, 3)));
+      if (progresso < 1) quadro = requestAnimationFrame(animar);
+    };
+    quadro = requestAnimationFrame(animar);
+    return () => cancelAnimationFrame(quadro);
+  }, [valor]);
+
+  return <>{moeda ? brl(atual) : Math.round(atual).toLocaleString("pt-BR")}</>;
+}
+
 export default function App() {
   const [aba, setAba] = useState("painel");
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -301,7 +324,7 @@ export default function App() {
         {carregando ? (
           <Spinner />
         ) : (
-          <>
+          <div key={aba} className="page-enter">
             {aba === "painel" && (
               <Painel clientes={clientes} pedidos={pedidos} nomeCliente={nomeCliente} />
             )}
@@ -332,7 +355,7 @@ export default function App() {
               <Produtos produtos={produtos} recarregar={carregar} avisar={avisar} podeExcluir={podeExcluir} />
             )}
             {aba === "auditoria" && podeExcluir && <Auditoria />}
-          </>
+          </div>
         )}
       </main>
 
@@ -371,7 +394,7 @@ export default function App() {
         </Modal>
       )}
       {toast && (
-        <div className="fixed bottom-5 right-5 bg-acc text-base font-disp uppercase text-sm px-4 py-2 shadow-lg z-50">
+        <div className="fixed bottom-5 right-5 bg-acc text-base font-disp uppercase text-sm px-4 py-2 shadow-lg z-50 toast-enter">
           {toast}
         </div>
       )}
@@ -398,10 +421,10 @@ function Painel({ clientes, pedidos, nomeCliente }: any) {
     .slice(0, 6);
 
   const stats = [
-    ["Clientes", clientes.length],
-    ["Orçamentos abertos", porStatus("orcamento")],
-    ["Em produção", porStatus("confirmado") + porStatus("producao")],
-    ["Faturado no mês", brl(fatMes)],
+    { label: "Clientes", valor: clientes.length },
+    { label: "Orçamentos abertos", valor: porStatus("orcamento") },
+    { label: "Em produção", valor: porStatus("confirmado") + porStatus("producao") },
+    { label: "Faturado no mês", valor: fatMes, moeda: true },
   ];
 
   const totalPed = pedidos.length || 1;
@@ -411,11 +434,11 @@ function Painel({ clientes, pedidos, nomeCliente }: any) {
       <h1 className="font-disp text-2xl font-bold uppercase tracking-wide mb-6">Painel</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map(([label, valor]) => (
-          <div key={label as string} className="bg-panel border border-line p-4 relative overflow-hidden">
+        {stats.map(({ label, valor, moeda }, i) => (
+          <div key={label} className="bg-panel border border-line p-4 relative overflow-hidden card-enter" style={{ animationDelay: `${i * 70}ms` }}>
             <div className="absolute top-0 left-0 w-8 h-0.5 bg-acc" />
             <div className="text-[11px] font-disp uppercase tracking-widest text-mut">{label}</div>
-            <div className="font-mono text-2xl mt-2 text-white">{valor}</div>
+            <div className="font-mono text-2xl mt-2 text-white"><NumeroAnimado valor={valor} moeda={moeda} /></div>
           </div>
         ))}
       </div>
@@ -429,7 +452,7 @@ function Painel({ clientes, pedidos, nomeCliente }: any) {
           {STATUS.map((s) => {
             const n = porStatus(s.id);
             return n > 0 ? (
-              <div key={s.id} style={{ width: `${(n / totalPed) * 100}%`, background: s.cor }} />
+              <div key={s.id} className="pipeline-fill" style={{ width: `${(n / totalPed) * 100}%`, background: s.cor }} />
             ) : null;
           })}
         </div>
@@ -450,8 +473,8 @@ function Painel({ clientes, pedidos, nomeCliente }: any) {
         <Empty texto="Nenhuma entrega agendada. Pedidos com data aparecem aqui." />
       ) : (
         <div className="bg-panel border border-line divide-y divide-line">
-          {proximas.map((p: Pedido) => (
-            <div key={p.id} className="flex items-center justify-between px-4 py-3">
+          {proximas.map((p: Pedido, i: number) => (
+            <div key={p.id} className="flex items-center justify-between px-4 py-3 card-enter" style={{ animationDelay: `${i * 55}ms` }}>
               <div>
                 <div className="text-sm text-white">{nomeCliente(p.cliente_id)}</div>
                 <div className="text-xs text-mut font-mono mt-0.5">
@@ -517,7 +540,7 @@ function Auditoria() {
         <div className="bg-panel border border-line divide-y divide-line">
           {registros.map((registro) => {
             return (
-              <details key={registro.id} className="group px-4 py-3">
+              <details key={registro.id} className="group px-4 py-3 card-enter">
                 <summary className="cursor-pointer list-none flex items-start justify-between gap-4">
                   <div>
                     <div className="text-sm text-white">
@@ -571,11 +594,11 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir, podeExcluir 
         />
       ) : (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {lista.map((c: Cliente) => {
+          {lista.map((c: Cliente, i: number) => {
             const n = pedidos.filter((p: Pedido) => p.cliente_id === c.id).length;
             const tel = (c.telefone || "").replace(/\D/g, "");
             return (
-              <div key={c.id} className="bg-panel border border-line p-4 flex flex-col">
+              <div key={c.id} className="bg-panel border border-line p-4 flex flex-col card-enter" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
                 <div className="flex justify-between items-start gap-2">
                   <div className="font-disp font-semibold text-white">{c.nome}</div>
                   <span className="text-[11px] font-mono text-mut whitespace-nowrap">
@@ -677,8 +700,8 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
         <Empty texto={etapa ? `Nenhum pedido em ${etapa.label.toLowerCase()}.` : "Nenhum pedido cadastrado ainda."} acao={<Btn onClick={() => onNovo(statusInicial)}>+ {nomeAcao}</Btn>} />
       ) : (
         <div className="space-y-3">
-          {lista.map((p: Pedido) => (
-            <div key={p.id} className="bg-panel border border-line">
+          {lista.map((p: Pedido, i: number) => (
+            <div key={p.id} className="bg-panel border border-line card-enter" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
               <div className="px-4 py-3 flex justify-between items-start gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">

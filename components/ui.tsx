@@ -35,7 +35,7 @@ export function Btn({
   className = "",
 }: any) {
   const base =
-    "font-disp uppercase tracking-wide text-sm px-4 py-2 transition-colors ";
+    "font-disp uppercase tracking-wide text-sm px-4 py-2 transition-all duration-150 active:scale-[.98] hover:-translate-y-px ";
   const styles: any = {
     primary: disabled
       ? "bg-panel2 text-mut cursor-not-allowed"
@@ -68,14 +68,14 @@ export function Modal({ titulo, children, onFechar, centralizado = false }: any)
   return (
     <div
       className={
-        "fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center p-4 overflow-auto z-50 " +
+        "fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center p-4 overflow-auto z-50 modal-backdrop " +
         (centralizado ? "items-center" : "items-start")
       }
       onClick={onFechar}
     >
       <div
         className={
-          "bg-panel border border-line w-full max-w-lg shadow-2xl " +
+          "bg-panel border border-line w-full max-w-lg shadow-2xl modal-enter " +
           (centralizado ? "" : "mt-10")
         }
         onClick={(e) => e.stopPropagation()}
