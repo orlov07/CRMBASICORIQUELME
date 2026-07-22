@@ -19,9 +19,10 @@ export const brl = (v: number) =>
 
 export function Chip({ status }: { status: string }) {
   const s = STATUS.find((x) => x.id === status) || STATUS[0];
+  const icones: Record<string, string> = { orcamento: "◌", confirmado: "✓", producao: "◫", entregue: "●" };
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-disp uppercase tracking-wide px-2 py-0.5 border border-line bg-panel2 text-zinc-300">
-      <span className="w-1.5 h-1.5" style={{ background: s.cor }} />
+    <span title={`Status: ${s.label}`} className="inline-flex items-center gap-1.5 text-[11px] font-disp uppercase tracking-wide px-2 py-1 border bg-panel2 text-zinc-100" style={{ borderColor: s.cor + "88" }}>
+      <span className="text-xs" style={{ color: s.cor }}>{icones[s.id]}</span>
       {s.label}
     </span>
   );
@@ -95,13 +96,13 @@ export function Modal({ titulo, children, onFechar, centralizado = false }: any)
 
 export function Empty({ texto, acao }: { texto: string; acao?: React.ReactNode }) {
   return (
-    <div className="border border-dashed border-line bg-panel/50 p-10 text-center">
-      <div className="mx-auto mb-4 grid grid-cols-3 gap-1 w-fit opacity-40">
+    <div className="border border-dashed border-line bg-panel/70 p-8 sm:p-10 text-center rounded-sm">
+      <div className="mx-auto mb-4 grid grid-cols-3 gap-1 w-fit opacity-60">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="w-6 h-4 border border-mut" />
         ))}
       </div>
-      <p className="text-mut text-sm">{texto}</p>
+      <p className="text-zinc-400 text-sm max-w-md mx-auto leading-6">{texto}</p>
       {acao && <div className="mt-4">{acao}</div>}
     </div>
   );

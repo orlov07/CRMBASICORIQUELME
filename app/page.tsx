@@ -51,6 +51,11 @@ const NAV = [
 });
 
 const EMAIL_ADMINISTRADOR = "igoraguiarviana@gmail.com";
+const GRUPOS_NAVEGACAO = [
+  { titulo: "Visão geral", ids: ["painel", "relatorios"] },
+  { titulo: "Operação", ids: ["pedidos", "agenda", "producao", "estoque"] },
+  { titulo: "Cadastros", ids: ["clientes", "produtos"] },
+];
 
 function NumeroAnimado({ valor, moeda = false }: { valor: number; moeda?: boolean }) {
   const [atual, setAtual] = useState(0);
@@ -85,7 +90,10 @@ export default function App() {
   const [sessao, setSessao] = useState<any>(null);
   const [modal, setModal] = useState<any>(null);
   const [toast, setToast] = useState("");
+  const [menuCompacto, setMenuCompacto] = useState(false);
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
   const podeExcluir = sessao?.user?.email?.toLowerCase() === EMAIL_ADMINISTRADOR;
+  const tituloAba = (NAV.find((item) => item.id === aba)?.label || (aba === "auditoria" ? "Auditoria" : "CRM"));
 
   const avisar = (t: string) => {
     setToast(t);
@@ -332,15 +340,16 @@ export default function App() {
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col md:flex-row">
       {/* ---------- Sidebar ---------- */}
-      <aside className="md:w-56 md:h-screen md:shrink-0 bg-panel border-b md:border-b-0 md:border-r border-line flex md:flex-col">
+      <aside className={(menuCompacto ? "md:w-20" : "md:w-56") + " hidden md:flex md:h-screen md:shrink-0 bg-panel border-r border-line flex-col transition-[width] duration-200"}>
         <div className="hidden md:block hazard h-1.5 w-full" />
-        <div className="px-4 py-4 md:py-6 flex md:block items-center gap-3">
+        <div className={(menuCompacto ? "px-3" : "px-4") + " py-5 relative"}>
+          <button onClick={() => setMenuCompacto(!menuCompacto)} title={menuCompacto ? "Expandir menu" : "Recolher menu"} className="absolute top-3 right-3 text-zinc-500 hover:text-white text-xs">{menuCompacto ? "»" : "«"}</button>
           <div className="grid grid-cols-2 gap-0.5 w-fit">
             {[...Array(4)].map((_, i) => (
               <div key={i} className={"w-3.5 h-2.5 " + (i === 1 ? "bg-acc" : "bg-zinc-600")} />
             ))}
           </div>
-          <div className="md:mt-3">
+          <div className={menuCompacto ? "hidden" : "mt-3"}>
             <div className="font-disp font-bold uppercase leading-none tracking-wide">
               Riquelme
             </div>
@@ -349,29 +358,37 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="hidden md:block px-4 pb-3">
+        <div className={(menuCompacto ? "px-3 text-center" : "px-4") + " pb-3"}>
           <button onClick={sair} className="text-xs text-mut hover:text-white underline">
             Sair
           </button>
         </div>
-        <nav className="flex md:flex-col flex-1 md:px-2 overflow-x-auto md:overflow-x-hidden md:overflow-y-auto scroll-slim">
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => setAba(n.id)}
-              className={
-                "flex items-center gap-3 px-4 py-3 text-sm font-disp uppercase tracking-wide border-l-2 md:border-l-2 transition-colors whitespace-nowrap " +
-                (aba === n.id
-                  ? "border-acc text-white bg-panel2"
-                  : "border-transparent text-mut hover:text-zinc-200")
-              }
-            >
-              <span className="text-acc">{n.icone}</span>
-              {n.label}
-            </button>
+        <nav className="flex-1 px-2 overflow-y-auto scroll-slim">
+          {GRUPOS_NAVEGACAO.map((grupo) => (
+            <div key={grupo.titulo} className="mb-4">
+              {!menuCompacto && <div className="px-3 mb-1 text-[10px] uppercase tracking-widest text-zinc-600">{grupo.titulo}</div>}
+              {grupo.ids.map((id) => {
+                const n = NAV.find((item) => item.id === id);
+                if (!n) return null;
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => setAba(n.id)}
+                    title={n.label}
+                    className={
+                      "w-full flex items-center " + (menuCompacto ? "justify-center px-2" : "gap-3 px-3") + " py-2.5 text-sm font-disp uppercase tracking-wide border-l-2 transition-colors whitespace-nowrap " +
+                      (aba === n.id ? "border-acc text-white bg-panel2" : "border-transparent text-mut hover:text-zinc-200 hover:bg-panel2/50")
+                    }
+                  >
+                    <span className="text-acc">{n.icone}</span>
+                    {!menuCompacto && n.label}
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </nav>
-        <div className="hidden md:block px-4 py-4 font-mono">
+        <div className={(menuCompacto ? "px-2 text-center" : "px-4") + " py-4 font-mono border-t border-line"}>
           {podeExcluir && (
             <button
               onClick={() => setAba("auditoria")}
@@ -383,16 +400,35 @@ export default function App() {
               ◫ Auditoria
             </button>
           )}
-          <div className="text-[10px] uppercase tracking-widest text-zinc-600">Conta logada</div>
-          <div className="mt-1 text-[10px] uppercase tracking-widest text-acc">{podeExcluir ? "Administrador" : "Operador"}</div>
-          <div className="mt-1 text-[11px] text-zinc-400 truncate" title={sessao?.user?.email || ""}>
-            {sessao?.user?.email}
+          <div className={(menuCompacto ? "hidden" : "") + " text-[10px] uppercase tracking-widest text-zinc-500"}>Conta logada</div>
+          <div className={(menuCompacto ? "hidden" : "mt-1") + " text-[10px] uppercase tracking-widest text-acc"}>{podeExcluir ? "Administrador" : "Operador"}</div>
+          <div className={(menuCompacto ? "text-xs" : "mt-1 text-[11px] truncate") + " text-zinc-300"} title={sessao?.user?.email || ""}>
+            {menuCompacto ? sessao?.user?.email?.slice(0, 1).toUpperCase() : sessao?.user?.email}
           </div>
         </div>
       </aside>
 
+      <div className="md:hidden fixed top-0 inset-x-0 z-30 h-14 bg-panel/95 backdrop-blur border-b border-line flex items-center justify-between px-4">
+        <div><div className="font-disp text-sm uppercase text-white">Riquelme</div><div className="text-[10px] uppercase tracking-widest text-mut">{tituloAba}</div></div>
+        <button onClick={sair} className="text-xs text-mut underline">Sair</button>
+      </div>
+      {menuMobileAberto && (
+        <div className="md:hidden fixed bottom-16 inset-x-3 z-40 bg-panel border border-line p-3 shadow-2xl grid grid-cols-2 gap-2">
+          {NAV.filter((item) => !["painel", "pedidos", "agenda"].includes(item.id)).map((item) => <button key={item.id} onClick={() => { setAba(item.id); setMenuMobileAberto(false); }} className="text-left px-3 py-2 text-xs font-disp uppercase text-mut hover:text-white hover:bg-panel2"><span className="text-acc mr-2">{item.icone}</span>{item.label}</button>)}
+          {podeExcluir && <button onClick={() => { setAba("auditoria"); setMenuMobileAberto(false); }} className="text-left px-3 py-2 text-xs font-disp uppercase text-mut hover:text-white hover:bg-panel2"><span className="text-acc mr-2">◫</span>Auditoria</button>}
+        </div>
+      )}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 bg-panel/95 backdrop-blur border-t border-line grid grid-cols-4">
+        {[{ id: "painel", label: "Painel", icon: "◈" }, { id: "pedidos", label: "Pedidos", icon: "▤" }, { id: "agenda", label: "Agenda", icon: "◫" }].map((item) => <button key={item.id} onClick={() => { setAba(item.id); setMenuMobileAberto(false); }} className={(aba === item.id ? "text-acc" : "text-mut") + " flex flex-col items-center justify-center text-[10px] font-disp uppercase"}><span className="text-base leading-none mb-1">{item.icon}</span>{item.label}</button>)}
+        <button onClick={() => setMenuMobileAberto(!menuMobileAberto)} className={(menuMobileAberto ? "text-acc" : "text-mut") + " flex flex-col items-center justify-center text-[10px] font-disp uppercase"}><span className="text-base leading-none mb-1">☰</span>Mais</button>
+      </nav>
+
       {/* ---------- Conteúdo ---------- */}
-      <main className="flex-1 min-w-0 px-4 md:px-8 py-6 md:h-screen md:overflow-y-auto md:overscroll-contain scroll-slim">
+      <main className="flex-1 min-w-0 px-4 md:px-8 pt-20 pb-24 md:py-6 md:h-screen md:overflow-y-auto md:overscroll-contain scroll-slim">
+        <div className="hidden md:flex sticky top-0 z-20 -mx-2 px-2 py-3 mb-4 bg-base/95 backdrop-blur border-b border-line items-center justify-between">
+          <div><div className="text-[10px] uppercase tracking-widest text-zinc-500">Gestão operacional</div><div className="font-disp text-lg uppercase text-white">{tituloAba}</div></div>
+          <div className="text-xs font-mono text-mut">{new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}</div>
+        </div>
         {!configurado && (
           <div className="mb-6 border border-acc/40 bg-acc/10 px-4 py-3 text-sm text-amber-200">
             Banco de dados ainda não configurado — preencha as chaves do Supabase em{" "}
@@ -517,8 +553,6 @@ function Painel({ clientes, pedidos, produtos, nomeCliente, onAgenda }: any) {
     { label: "Orçamentos abertos", valor: porStatus("orcamento") },
     { label: "Em produção", valor: porStatus("confirmado") + porStatus("producao") },
     { label: "Faturado no mês", valor: fatMes, moeda: true },
-    { label: "Pedidos no total", valor: pedidos.length },
-    { label: "Faturamento total", valor: faturamentoTotal, moeda: true },
   ];
 
   const totalPed = pedidos.length || 1;
@@ -553,9 +587,9 @@ function Painel({ clientes, pedidos, produtos, nomeCliente, onAgenda }: any) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {stats.map(({ label, valor, moeda }, i) => (
-          <div key={label} className="bg-panel border border-line p-4 relative overflow-hidden card-enter" style={{ animationDelay: `${i * 70}ms` }}>
+          <div key={label} className="surface-card p-4 relative overflow-hidden card-enter" style={{ animationDelay: `${i * 70}ms` }}>
             <div className="absolute top-0 left-0 w-8 h-0.5 bg-acc" />
             <div className="text-[11px] font-disp uppercase tracking-widest text-mut">{label}</div>
             <div className="font-mono text-2xl mt-2 text-white"><NumeroAnimado valor={valor} moeda={moeda} /></div>
@@ -946,6 +980,7 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
   const [inicio, setInicio] = useState("");
   const [fim, setFim] = useState("");
   const [confirmar, setConfirmar] = useState<string | null>(null);
+  const [acoesAbertas, setAcoesAbertas] = useState<string | null>(null);
   const lista = pedidos.filter((p: Pedido) => {
     const data = p.data_entrega || p.criado_em.slice(0, 10);
     const correspondeBusca = (nomeCliente(p.cliente_id) + " " + p.status).toLowerCase().includes(busca.toLowerCase());
@@ -1047,36 +1082,18 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
                       </option>
                     ))}
                   </select>
-                  <div className="mt-2 flex gap-3 justify-end text-xs">
-                    <button onClick={() => onImprimir(p)} className="text-acc hover:text-amber-300 underline">
-                      PDF
-                    </button>
-                    <button onClick={() => onWhatsApp(p)} className="text-emerald-400 hover:text-emerald-300 underline">
-                      WhatsApp
-                    </button>
-                    <label className="text-sky-300 hover:text-sky-200 underline cursor-pointer">
-                      Anexar entrega
-                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const arquivo = e.target.files?.[0]; if (arquivo) onComprovante(p, arquivo); e.currentTarget.value = ""; }} />
-                    </label>
-                    {p.comprovante_path && <button onClick={() => onVerComprovante(p)} className="text-sky-300 hover:text-sky-200 underline">Ver comprovante</button>}
-                    <button onClick={() => onEditar(p)} className="text-mut hover:text-white underline">
-                      Editar
-                    </button>
-                    {podeExcluir && (confirmar === p.id ? (
-                      <button
-                        onClick={() => { onExcluir(p.id); setConfirmar(null); }}
-                        className="text-red-400 hover:text-red-300 underline"
-                      >
-                        Confirmar?
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmar(p.id)}
-                        className="text-zinc-600 hover:text-red-400 underline"
-                      >
-                        Excluir
-                      </button>
-                    ))}
+                  <div className="relative mt-2 flex justify-end text-xs">
+                    <button onClick={() => setAcoesAbertas(acoesAbertas === p.id ? null : p.id)} className="border border-line px-2 py-1 text-mut hover:text-white hover:border-mut">Ações ▾</button>
+                    {acoesAbertas === p.id && (
+                      <div className="absolute right-0 top-8 z-10 w-40 bg-panel border border-line shadow-xl text-left py-1">
+                        <button onClick={() => { onImprimir(p); setAcoesAbertas(null); }} className="w-full px-3 py-2 text-acc hover:bg-panel2">Gerar PDF</button>
+                        <button onClick={() => { onWhatsApp(p); setAcoesAbertas(null); }} className="w-full px-3 py-2 text-emerald-300 hover:bg-panel2">Enviar WhatsApp</button>
+                        <label className="block px-3 py-2 text-sky-300 hover:bg-panel2 cursor-pointer">Anexar entrega<input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const arquivo = e.target.files?.[0]; if (arquivo) onComprovante(p, arquivo); e.currentTarget.value = ""; setAcoesAbertas(null); }} /></label>
+                        {p.comprovante_path && <button onClick={() => { onVerComprovante(p); setAcoesAbertas(null); }} className="w-full px-3 py-2 text-sky-300 hover:bg-panel2">Ver comprovante</button>}
+                        <button onClick={() => { onEditar(p); setAcoesAbertas(null); }} className="w-full px-3 py-2 text-zinc-300 hover:bg-panel2">Editar</button>
+                        {podeExcluir && (confirmar === p.id ? <button onClick={() => { onExcluir(p.id); setConfirmar(null); setAcoesAbertas(null); }} className="w-full px-3 py-2 text-red-300 hover:bg-panel2">Confirmar exclusão</button> : <button onClick={() => setConfirmar(p.id)} className="w-full px-3 py-2 text-red-400 hover:bg-panel2">Excluir</button>)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

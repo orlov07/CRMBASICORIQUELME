@@ -40,6 +40,24 @@ textarea {
   color-scheme: dark;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #f2a900;
+  outline-offset: 2px;
+}
+
+.surface-card {
+  background: #141417;
+  border: 1px solid #303036;
+  transition: border-color .18s ease, transform .18s ease;
+}
+
+.surface-card:hover {
+  border-color: #55555e;
+}
+
 .scroll-slim::-webkit-scrollbar {
   width: 6px;
   height: 6px;
