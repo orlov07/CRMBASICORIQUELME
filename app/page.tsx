@@ -42,6 +42,8 @@ const NAV = [
   { id: "produtos", label: "Produtos", icone: "▣" },
 ];
 
+const EMAIL_ADMINISTRADOR = "igoraguiarviana@gmail.com";
+
 export default function App() {
   const [aba, setAba] = useState("painel");
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -52,6 +54,7 @@ export default function App() {
   const [sessao, setSessao] = useState<any>(null);
   const [modal, setModal] = useState<any>(null);
   const [toast, setToast] = useState("");
+  const podeExcluir = sessao?.user?.email?.toLowerCase() === EMAIL_ADMINISTRADOR;
 
   const avisar = (t: string) => {
     setToast(t);
@@ -298,6 +301,7 @@ export default function App() {
                 onNovo={() => setModal({ tipo: "cliente" })}
                 onEditar={(c: Cliente) => setModal({ tipo: "cliente", dado: c })}
                 onExcluir={excluirCliente}
+                podeExcluir={podeExcluir}
               />
             )}
             {aba === "pedidos" && (
@@ -310,10 +314,11 @@ export default function App() {
                 onEditar={(p: Pedido) => setModal({ tipo: "pedido", dado: p })}
                 onStatus={mudarStatus}
                 onExcluir={excluirPedido}
+                podeExcluir={podeExcluir}
               />
             )}
             {aba === "produtos" && (
-              <Produtos produtos={produtos} recarregar={carregar} avisar={avisar} />
+              <Produtos produtos={produtos} recarregar={carregar} avisar={avisar} podeExcluir={podeExcluir} />
             )}
           </>
         )}
@@ -451,7 +456,7 @@ function Painel({ clientes, pedidos, nomeCliente }: any) {
 }
 
 // ================= Clientes =================
-function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir }: any) {
+function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir, podeExcluir }: any) {
   const [busca, setBusca] = useState("");
   const [confirmar, setConfirmar] = useState<string | null>(null);
   const lista = clientes.filter((c: Cliente) =>
@@ -512,7 +517,7 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir }: any) {
                   <button onClick={() => onEditar(c)} className="text-xs text-mut hover:text-white underline">
                     Editar
                   </button>
-                  {confirmar === c.id ? (
+                  {podeExcluir && (confirmar === c.id ? (
                     <button
                       onClick={() => { onExcluir(c.id); setConfirmar(null); }}
                       className="text-xs text-red-400 hover:text-red-300 underline ml-auto"
@@ -526,7 +531,7 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir }: any) {
                     >
                       Excluir
                     </button>
-                  )}
+                  ))}
                 </div>
               </div>
             );
@@ -538,7 +543,7 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir }: any) {
 }
 
 // ================= Pedidos =================
-function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, onStatus, onExcluir }: any) {
+function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, onStatus, onExcluir, podeExcluir }: any) {
   const [filtro, setFiltro] = useState("todos");
   const [confirmar, setConfirmar] = useState<string | null>(null);
   const lista = pedidos.filter((p: Pedido) => filtro === "todos" || p.status === filtro);
@@ -636,7 +641,7 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
                     <button onClick={() => onEditar(p)} className="text-mut hover:text-white underline">
                       Editar
                     </button>
-                    {confirmar === p.id ? (
+                    {podeExcluir && (confirmar === p.id ? (
                       <button
                         onClick={() => { onExcluir(p.id); setConfirmar(null); }}
                         className="text-red-400 hover:text-red-300 underline"
@@ -650,7 +655,7 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
                       >
                         Excluir
                       </button>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
@@ -663,7 +668,7 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
 }
 
 // ================= Produtos =================
-function Produtos({ produtos, recarregar, avisar }: any) {
+function Produtos({ produtos, recarregar, avisar, podeExcluir }: any) {
   const [novo, setNovo] = useState({ nome: "", preco: "" });
   const [edits, setEdits] = useState<any>({});
 
@@ -732,9 +737,11 @@ function Produtos({ produtos, recarregar, avisar }: any) {
                   Salvar
                 </button>
               )}
+              {podeExcluir && (
               <button onClick={() => excluir(p.id)} className="text-zinc-600 hover:text-red-400 text-sm" aria-label="Excluir produto">
                 ✕
               </button>
+              )}
             </div>
           );
         })}
