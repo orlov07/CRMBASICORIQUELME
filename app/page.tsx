@@ -330,9 +330,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
+    <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col md:flex-row">
       {/* ---------- Sidebar ---------- */}
-      <aside className="md:w-56 md:min-h-screen bg-panel border-b md:border-b-0 md:border-r border-line flex md:flex-col">
+      <aside className="md:w-56 md:h-screen md:shrink-0 bg-panel border-b md:border-b-0 md:border-r border-line flex md:flex-col">
         <div className="hidden md:block hazard h-1.5 w-full" />
         <div className="px-4 py-4 md:py-6 flex md:block items-center gap-3">
           <div className="grid grid-cols-2 gap-0.5 w-fit">
@@ -354,7 +354,7 @@ export default function App() {
             Sair
           </button>
         </div>
-        <nav className="flex md:flex-col flex-1 md:px-2 overflow-x-auto scroll-slim">
+        <nav className="flex md:flex-col flex-1 md:px-2 overflow-x-auto md:overflow-x-hidden md:overflow-y-auto scroll-slim">
           {NAV.map((n) => (
             <button
               key={n.id}
@@ -392,7 +392,7 @@ export default function App() {
       </aside>
 
       {/* ---------- Conteúdo ---------- */}
-      <main className="flex-1 px-4 md:px-8 py-6 max-w-6xl">
+      <main className="flex-1 min-w-0 px-4 md:px-8 py-6 md:h-screen md:overflow-y-auto md:overscroll-contain scroll-slim">
         {!configurado && (
           <div className="mb-6 border border-acc/40 bg-acc/10 px-4 py-3 text-sm text-amber-200">
             Banco de dados ainda não configurado — preencha as chaves do Supabase em{" "}
