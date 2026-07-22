@@ -36,6 +36,7 @@ type Pedido = {
 };
 
 const NAV = [
+  { id: "agenda", label: "Agenda", icone: "◫" },
   { id: "painel", label: "Painel", icone: "▦" },
   { id: "clientes", label: "Clientes", icone: "◉" },
   { id: "pedidos", label: "Pedidos", icone: "▤" },
@@ -162,6 +163,45 @@ export default function App() {
 
   const nomeCliente = (id: string) =>
     clientes.find((c) => c.id === id)?.nome || "Cliente removido";
+
+  const enviarWhatsApp = (pedido: Pedido) => {
+    const cliente = clientes.find((c) => c.id === pedido.cliente_id);
+    const telefone = cliente?.telefone?.replace(/\D/g, "");
+    if (!cliente || !telefone) {
+      avisar("Este cliente não possui WhatsApp cadastrado");
+      return;
+    }
+    const itens = pedido.itens
+      .map((item) => {
+        const produto = produtos.find((p) => p.id === item.produto_id);
+        return produto ? `• ${item.qtd}x ${produto.nome}` : null;
+      })
+      .filter(Boolean)
+      .join("\n");
+    const titulo = pedido.status === "orcamento" ? "Orçamento" : "Pedido";
+    const mensagem = `${titulo} - Riquelme Fábrica de Blocos\n\nCliente: ${cliente.nome}\n${itens ? `\nItens:\n${itens}\n` : ""}\nTotal: ${brl(Number(pedido.total))}${pedido.data_entrega ? `\nEntrega: ${new Date(pedido.data_entrega + "T12:00").toLocaleDateString("pt-BR")}` : ""}`;
+    window.open(`https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`, "_blank", "noopener,noreferrer");
+  };
+
+  const imprimirPedido = (pedido: Pedido) => {
+    const cliente = clientes.find((c) => c.id === pedido.cliente_id);
+    const popup = window.open("", "_blank");
+    if (!popup) {
+      avisar("Permita pop-ups para gerar o PDF");
+      return;
+    }
+    const escapar = (texto: string) => texto.replace(/[&<>"']/g, (caractere) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[caractere] || caractere));
+    const itens = pedido.itens.map((item) => {
+      const produto = produtos.find((p) => p.id === item.produto_id);
+      return `<tr><td>${escapar(produto?.nome || "Produto removido")}</td><td>${item.qtd}</td><td>${produto ? brl(produto.preco * item.qtd) : "-"}</td></tr>`;
+    }).join("") || "<tr><td colspan=\"3\">Nenhum item adicionado.</td></tr>";
+    const titulo = pedido.status === "orcamento" ? "ORÇAMENTO" : "PEDIDO";
+    const entrega = pedido.data_entrega ? ` · Entrega prevista: ${new Date(pedido.data_entrega + "T12:00").toLocaleDateString("pt-BR")}` : "";
+    popup.document.write(`<!doctype html><html lang="pt-BR"><head><title>${titulo} - Riquelme</title><style>body{font-family:Arial,sans-serif;color:#18181b;padding:42px;max-width:760px;margin:auto}h1{margin:0;font-size:28px}h2{font-size:14px;color:#71717a;text-transform:uppercase;letter-spacing:1px;margin:6px 0 28px}.line{height:7px;background:#f2a900;margin-bottom:28px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px;border-bottom:1px solid #ddd;text-align:left}th{font-size:12px;color:#71717a;text-transform:uppercase}td:nth-child(2),td:nth-child(3){text-align:right}.total{margin-top:24px;text-align:right;font-size:22px;font-weight:bold}.muted{color:#71717a;font-size:13px}@media print{body{padding:0}}</style></head><body><div class="line"></div><h1>RIQUELME</h1><h2>Fábrica de Blocos · ${titulo}</h2><p><strong>Cliente:</strong> ${escapar(cliente?.nome || "Cliente removido")}<br><span class="muted">Emitido em ${new Date().toLocaleDateString("pt-BR")}${entrega}</span></p><table><thead><tr><th>Produto</th><th>Quantidade</th><th>Subtotal</th></tr></thead><tbody>${itens}</tbody></table><div class="total">Total: ${brl(Number(pedido.total))}</div></body></html>`);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  };
 
   // ---------- ações ----------
   const salvarCliente = async (f: any) => {
@@ -349,7 +389,12 @@ export default function App() {
                 onStatus={mudarStatus}
                 onExcluir={excluirPedido}
                 podeExcluir={podeExcluir}
+                onWhatsApp={enviarWhatsApp}
+                onImprimir={imprimirPedido}
               />
+            )}
+            {aba === "agenda" && (
+              <Agenda pedidos={pedidos} nomeCliente={nomeCliente} onNovo={novoPedido} onEditar={(p: Pedido) => setModal({ tipo: "pedido", dado: p })} />
             )}
             {aba === "produtos" && (
               <Produtos produtos={produtos} recarregar={carregar} avisar={avisar} podeExcluir={podeExcluir} />
@@ -651,8 +696,58 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir, podeExcluir 
   );
 }
 
+// ================= Agenda =================
+function Agenda({ pedidos, nomeCliente, onNovo, onEditar }: any) {
+  const entregas = pedidos
+    .filter((p: Pedido) => p.data_entrega)
+    .sort((a: Pedido, b: Pedido) => (a.data_entrega! > b.data_entrega! ? 1 : -1));
+
+  return (
+    <div className="max-w-4xl">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <div>
+          <h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Agenda de entregas</h1>
+          <p className="text-sm text-mut mt-1">Acompanhe e programe as próximas entregas.</p>
+        </div>
+        <Btn onClick={() => onNovo("producao")}>+ Agendar entrega</Btn>
+      </div>
+
+      {entregas.length === 0 ? (
+        <Empty texto="Nenhuma entrega agendada. Crie ou edite um pedido e informe a data de entrega." acao={<Btn onClick={() => onNovo("producao")}>+ Agendar entrega</Btn>} />
+      ) : (
+        <div className="bg-panel border border-line divide-y divide-line">
+          {entregas.map((pedido: Pedido, i: number) => {
+            const data = new Date(pedido.data_entrega + "T12:00");
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const atrasada = data < hoje && pedido.status !== "entregue";
+            return (
+              <button
+                key={pedido.id}
+                onClick={() => onEditar(pedido)}
+                className="card-enter w-full px-4 py-4 flex items-center gap-4 text-left hover:bg-panel2 transition-colors"
+                style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
+              >
+                <div className={(atrasada ? "border-red-400 text-red-300" : "border-acc text-acc") + " w-16 shrink-0 border py-2 text-center font-mono"}>
+                  <div className="text-xl leading-none">{data.getDate().toString().padStart(2, "0")}</div>
+                  <div className="text-[10px] uppercase mt-1">{data.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-white font-medium truncate">{nomeCliente(pedido.cliente_id)}</div>
+                  <div className="text-xs text-mut font-mono mt-1">{atrasada ? "entrega atrasada" : data.toLocaleDateString("pt-BR", { weekday: "long" })} · {brl(Number(pedido.total))}</div>
+                </div>
+                <Chip status={pedido.status} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ================= Pedidos =================
-function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, onStatus, onExcluir, podeExcluir }: any) {
+function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, onStatus, onExcluir, podeExcluir, onWhatsApp, onImprimir }: any) {
   const [filtro, setFiltro] = useState("todos");
   const [confirmar, setConfirmar] = useState<string | null>(null);
   const lista = pedidos.filter((p: Pedido) => filtro === "todos" || p.status === filtro);
@@ -747,6 +842,12 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
                     ))}
                   </select>
                   <div className="mt-2 flex gap-3 justify-end text-xs">
+                    <button onClick={() => onImprimir(p)} className="text-acc hover:text-amber-300 underline">
+                      PDF
+                    </button>
+                    <button onClick={() => onWhatsApp(p)} className="text-emerald-400 hover:text-emerald-300 underline">
+                      WhatsApp
+                    </button>
                     <button onClick={() => onEditar(p)} className="text-mut hover:text-white underline">
                       Editar
                     </button>
