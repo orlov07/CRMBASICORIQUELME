@@ -32,7 +32,13 @@ create table if not exists public.crmriq_pedidos (
 -- Campos adicionados ao CRM operacional.
 alter table public.crmriq_produtos add column if not exists estoque_atual integer not null default 0 check (estoque_atual >= 0);
 alter table public.crmriq_produtos add column if not exists estoque_minimo integer not null default 0 check (estoque_minimo >= 0);
+alter table public.crmriq_clientes add column if not exists limite_credito numeric(12,2) not null default 0 check (limite_credito >= 0);
+alter table public.crmriq_clientes add column if not exists endereco text;
 alter table public.crmriq_pedidos add column if not exists comprovante_path text;
+alter table public.crmriq_pedidos add column if not exists forma_pagamento text;
+alter table public.crmriq_pedidos add column if not exists desconto numeric(12,2) not null default 0 check (desconto >= 0);
+alter table public.crmriq_pedidos add column if not exists frete numeric(12,2) not null default 0 check (frete >= 0);
+alter table public.crmriq_pedidos add column if not exists observacao text;
 
 -- Impede que apagar um cliente apague todos os seus pedidos em cascata.
 alter table public.crmriq_pedidos drop constraint if exists crmriq_pedidos_cliente_id_fkey;
@@ -180,5 +186,105 @@ begin
   end if;
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'crmriq_pedidos') then
     execute 'alter publication supabase_realtime add table public.crmriq_pedidos';
+  end if;
+end $$;
+
+-- Expansao administrativa: perfis, contas, custos e movimentacoes de estoque.
+-- A lista de acesso deixa de ficar fixa no codigo: o administrador gerencia os e-mails pelo CRM.
+create table if not exists public.crmriq_perfis (
+  email text primary key check (email = lower(email)),
+  nome text,
+  papel text not null default 'operador' check (papel in ('administrador', 'operador')),
+  ativo boolean not null default true,
+  criado_em timestamptz not null default now()
+);
+
+insert into public.crmriq_perfis (email, nome, papel, ativo) values
+  ('igoraguiarviana@gmail.com', 'Igor Aguiar Viana', 'administrador', true),
+  ('igor.vianaaidev@gmail.com', 'Igor Viana AI Dev', 'operador', true),
+  ('techbilld@gmail.com', 'TechBild', 'operador', true)
+on conflict (email) do nothing;
+
+create or replace function public.crmriq_eh_autorizado()
+returns boolean language sql stable security definer set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1 from public.crmriq_perfis
+    where email = lower(coalesce(auth.jwt() ->> 'email', '')) and ativo
+  );
+$$;
+
+create or replace function public.crmriq_eh_administrador()
+returns boolean language sql stable security definer set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1 from public.crmriq_perfis
+    where email = lower(coalesce(auth.jwt() ->> 'email', ''))
+      and ativo and papel = 'administrador'
+  );
+$$;
+
+create table if not exists public.crmriq_financeiro (
+  id uuid primary key default gen_random_uuid(),
+  tipo text not null check (tipo in ('receita', 'despesa')),
+  descricao text not null check (char_length(trim(descricao)) > 0),
+  valor numeric(12,2) not null check (valor > 0),
+  vencimento date not null default current_date,
+  pago_em date,
+  pedido_id uuid references public.crmriq_pedidos(id) on delete set null,
+  obs text,
+  criado_em timestamptz not null default now()
+);
+create index if not exists crmriq_financeiro_vencimento_idx on public.crmriq_financeiro(vencimento desc);
+
+create table if not exists public.crmriq_estoque_movimentos (
+  id uuid primary key default gen_random_uuid(),
+  produto_id uuid not null references public.crmriq_produtos(id) on delete restrict,
+  tipo text not null check (tipo in ('entrada', 'saida', 'ajuste')),
+  quantidade integer not null check (quantidade <> 0),
+  motivo text,
+  criado_em timestamptz not null default now()
+);
+create index if not exists crmriq_estoque_movimentos_produto_idx on public.crmriq_estoque_movimentos(produto_id, criado_em desc);
+
+alter table public.crmriq_perfis enable row level security;
+alter table public.crmriq_financeiro enable row level security;
+alter table public.crmriq_estoque_movimentos enable row level security;
+
+drop policy if exists "Autorizados leem perfis" on public.crmriq_perfis;
+drop policy if exists "Administrador gerencia perfis" on public.crmriq_perfis;
+create policy "Autorizados leem perfis" on public.crmriq_perfis for select to authenticated using (public.crmriq_eh_autorizado());
+create policy "Administrador gerencia perfis" on public.crmriq_perfis for all to authenticated using (public.crmriq_eh_administrador()) with check (public.crmriq_eh_administrador());
+
+drop policy if exists "Autorizados leem financeiro" on public.crmriq_financeiro;
+drop policy if exists "Autorizados criam financeiro" on public.crmriq_financeiro;
+drop policy if exists "Autorizados alteram financeiro" on public.crmriq_financeiro;
+drop policy if exists "Administrador exclui financeiro" on public.crmriq_financeiro;
+create policy "Autorizados leem financeiro" on public.crmriq_financeiro for select to authenticated using (public.crmriq_eh_autorizado());
+create policy "Autorizados criam financeiro" on public.crmriq_financeiro for insert to authenticated with check (public.crmriq_eh_autorizado());
+create policy "Autorizados alteram financeiro" on public.crmriq_financeiro for update to authenticated using (public.crmriq_eh_autorizado()) with check (public.crmriq_eh_autorizado());
+create policy "Administrador exclui financeiro" on public.crmriq_financeiro for delete to authenticated using (public.crmriq_eh_administrador());
+
+drop policy if exists "Autorizados leem movimentos de estoque" on public.crmriq_estoque_movimentos;
+drop policy if exists "Autorizados criam movimentos de estoque" on public.crmriq_estoque_movimentos;
+drop policy if exists "Administrador exclui movimentos de estoque" on public.crmriq_estoque_movimentos;
+create policy "Autorizados leem movimentos de estoque" on public.crmriq_estoque_movimentos for select to authenticated using (public.crmriq_eh_autorizado());
+create policy "Autorizados criam movimentos de estoque" on public.crmriq_estoque_movimentos for insert to authenticated with check (public.crmriq_eh_autorizado());
+create policy "Administrador exclui movimentos de estoque" on public.crmriq_estoque_movimentos for delete to authenticated using (public.crmriq_eh_administrador());
+
+drop trigger if exists crmriq_auditar_financeiro on public.crmriq_financeiro;
+create trigger crmriq_auditar_financeiro after insert or update or delete on public.crmriq_financeiro
+for each row execute function public.crmriq_registrar_auditoria();
+drop trigger if exists crmriq_auditar_movimentos_estoque on public.crmriq_estoque_movimentos;
+create trigger crmriq_auditar_movimentos_estoque after insert or update or delete on public.crmriq_estoque_movimentos
+for each row execute function public.crmriq_registrar_auditoria();
+
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'crmriq_financeiro') then
+    execute 'alter publication supabase_realtime add table public.crmriq_financeiro';
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'crmriq_estoque_movimentos') then
+    execute 'alter publication supabase_realtime add table public.crmriq_estoque_movimentos';
   end if;
 end $$;

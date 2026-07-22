@@ -5,15 +5,21 @@ CRM multiusuario com dados compartilhados em tempo real via Supabase Realtime.
 - **Painel**: indicadores, pipeline e proximas entregas
 - **Clientes**: cadastro com WhatsApp direto
 - **Pedidos**: orcamento -> confirmado -> em producao -> entregue
-- **Produtos**: catalogo de blocos com precos editaveis
+- **Produtos e estoque**: catálogo, níveis mínimos e histórico de movimentações
+- **Produção**: necessidade por pedido e registro da produção concluída
+- **Financeiro**: receitas, despesas, vencimentos, baixa e resultado realizado
+- **Acessos**: administrador libera, desativa e define operadores pelo CRM
+- **Relatórios**: indicadores por mês e exportação CSV compatível com Excel
 
 Stack: Next.js 16 (App Router) · TypeScript · Tailwind · Supabase
 
-Tabelas: `crmriq_clientes`, `crmriq_pedidos`, `crmriq_produtos`
+Tabelas principais: `crmriq_clientes`, `crmriq_pedidos`, `crmriq_produtos`, `crmriq_financeiro`, `crmriq_estoque_movimentos` e `crmriq_perfis`.
 
 ## Banco de dados
 
-O projeto Supabase ja oferece o banco PostgreSQL; faltam apenas as tabelas do CRM. No painel do Supabase, abra **SQL Editor -> New query**, cole o conteudo de `supabase/schema.sql` e clique em **Run**. O script cria as tres tabelas, permissoes para usuarios logados e atualizacao em tempo real.
+No painel do Supabase, abra **SQL Editor -> New query**, cole o conteúdo completo de `supabase/schema.sql` e clique em **Run**. O script pode ser executado novamente: ele atualiza as tabelas, permissões, auditoria e atualização em tempo real.
+
+Após esta versão, executar o SQL é obrigatório para ativar Financeiro, Movimentações de Estoque e a gestão de acessos. O primeiro administrador é `igoraguiarviana@gmail.com`; ele pode liberar ou desativar os demais usuários na aba **Acessos**.
 
 ## Web e aplicativo Windows
 

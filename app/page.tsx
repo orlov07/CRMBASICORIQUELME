@@ -23,6 +23,8 @@ type Cliente = {
   cidade: string | null;
   tipo: string | null;
   obs: string | null;
+  limite_credito?: number;
+  endereco?: string | null;
 };
 type Item = { produto_id: string; qtd: number };
 type Pedido = {
@@ -34,9 +36,17 @@ type Pedido = {
   total: number;
   criado_em: string;
   comprovante_path?: string | null;
+  forma_pagamento?: string | null;
+  desconto?: number | null;
+  frete?: number | null;
+  observacao?: string | null;
 };
+type Lancamento = { id: string; tipo: "receita" | "despesa"; descricao: string; valor: number; vencimento: string; pago_em: string | null; pedido_id: string | null; obs: string | null; criado_em: string };
+type MovimentoEstoque = { id: string; produto_id: string; tipo: "entrada" | "saida" | "ajuste"; quantidade: number; motivo: string | null; criado_em: string };
+type Perfil = { email: string; nome: string | null; papel: "administrador" | "operador"; ativo: boolean; criado_em: string };
 
 const NAV = [
+  { id: "financeiro", label: "Financeiro", icone: "R$" },
   { id: "estoque", label: "Estoque", icone: "▤" },
   { id: "producao", label: "Produção", icone: "◫" },
   { id: "relatorios", label: "Relatórios", icone: "▥" },
@@ -46,13 +56,13 @@ const NAV = [
   { id: "pedidos", label: "Pedidos", icone: "▤" },
   { id: "produtos", label: "Produtos", icone: "▣" },
 ].sort((a, b) => {
-  const ordem = ["painel", "clientes", "pedidos", "agenda", "estoque", "producao", "produtos", "relatorios"];
+  const ordem = ["painel", "financeiro", "clientes", "pedidos", "agenda", "estoque", "producao", "produtos", "relatorios"];
   return ordem.indexOf(a.id) - ordem.indexOf(b.id);
 });
 
 const EMAIL_ADMINISTRADOR = "igoraguiarviana@gmail.com";
 const GRUPOS_NAVEGACAO = [
-  { titulo: "Visão geral", ids: ["painel", "relatorios"] },
+  { titulo: "Visão geral", ids: ["painel", "financeiro", "relatorios"] },
   { titulo: "Operação", ids: ["pedidos", "agenda", "producao", "estoque"] },
   { titulo: "Cadastros", ids: ["clientes", "produtos"] },
 ];
@@ -85,6 +95,9 @@ export default function App() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
+  const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [authPronta, setAuthPronta] = useState(false);
   const [sessao, setSessao] = useState<any>(null);
@@ -93,7 +106,7 @@ export default function App() {
   const [menuCompacto, setMenuCompacto] = useState(false);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
   const podeExcluir = sessao?.user?.email?.toLowerCase() === EMAIL_ADMINISTRADOR;
-  const tituloAba = (NAV.find((item) => item.id === aba)?.label || (aba === "auditoria" ? "Auditoria" : "CRM"));
+  const tituloAba = (NAV.find((item) => item.id === aba)?.label || (aba === "auditoria" ? "Auditoria" : aba === "configuracoes" ? "Configurações" : "CRM"));
 
   const avisar = (t: string) => {
     setToast(t);
@@ -116,14 +129,20 @@ export default function App() {
   };
 
   const carregar = useCallback(async () => {
-    const [c, p, pr] = await Promise.all([
+    const [c, p, pr, fin, mov, perfilData] = await Promise.all([
       supabase.from("crmriq_clientes").select("*").order("nome"),
       supabase.from("crmriq_pedidos").select("*").order("criado_em", { ascending: false }),
       supabase.from("crmriq_produtos").select("*").order("nome"),
+      supabase.from("crmriq_financeiro").select("*").order("vencimento", { ascending: false }),
+      supabase.from("crmriq_estoque_movimentos").select("*").order("criado_em", { ascending: false }).limit(100),
+      supabase.from("crmriq_perfis").select("*").order("email"),
     ]);
     setClientes(c.data || []);
     setPedidos((p.data || []).map((x: any) => ({ ...x, itens: x.itens || [] })));
     setProdutos(pr.data || []);
+    setLancamentos(fin.data || []);
+    setMovimentos(mov.data || []);
+    setPerfis(perfilData.data || []);
     setCarregando(false);
   }, []);
 
@@ -152,6 +171,9 @@ export default function App() {
         setClientes([]);
         setPedidos([]);
         setProdutos([]);
+        setLancamentos([]);
+        setMovimentos([]);
+        setPerfis([]);
         setCarregando(false);
       }
     });
@@ -170,6 +192,9 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "crmriq_clientes" }, carregar)
       .on("postgres_changes", { event: "*", schema: "public", table: "crmriq_pedidos" }, carregar)
       .on("postgres_changes", { event: "*", schema: "public", table: "crmriq_produtos" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crmriq_financeiro" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crmriq_estoque_movimentos" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "crmriq_perfis" }, carregar)
       .subscribe();
     return () => {
       supabase.removeChannel(canal);
@@ -251,11 +276,12 @@ export default function App() {
 
   // ---------- ações ----------
   const salvarCliente = async (f: any) => {
-    if (f.id) {
-      const { id, ...resto } = f;
+    const dado = { ...f, limite_credito: Number(f.limite_credito) || 0, endereco: f.endereco || null };
+    if (dado.id) {
+      const { id, ...resto } = dado;
       await supabase.from("crmriq_clientes").update(resto).eq("id", id);
     } else {
-      await supabase.from("crmriq_clientes").insert(f);
+      await supabase.from("crmriq_clientes").insert(dado);
     }
     setModal(null);
     avisar("Cliente salvo");
@@ -273,7 +299,7 @@ export default function App() {
       const p = produtos.find((x) => x.id === it.produto_id);
       return s + (p ? p.preco * (Number(it.qtd) || 0) : 0);
     }, 0);
-    const dado = { ...f, total, data_entrega: f.data_entrega || null };
+    const dado = { ...f, total: Math.max(0, total - (Number(f.desconto) || 0) + (Number(f.frete) || 0)), data_entrega: f.data_entrega || null, forma_pagamento: f.forma_pagamento || null, desconto: Number(f.desconto) || 0, frete: Number(f.frete) || 0, observacao: f.observacao || null };
     if (dado.id) {
       const { id, ...resto } = dado;
       await supabase.from("crmriq_pedidos").update(resto).eq("id", id);
@@ -293,6 +319,33 @@ export default function App() {
   const excluirPedido = async (id: string) => {
     await supabase.from("crmriq_pedidos").delete().eq("id", id);
     avisar("Pedido excluído");
+    carregar();
+  };
+
+  const salvarLancamento = async (f: any) => {
+    const dado = { ...f, valor: Number(f.valor), vencimento: f.vencimento || new Date().toISOString().slice(0, 10), pago_em: f.pago_em || null, pedido_id: f.pedido_id || null, obs: f.obs || null };
+    const { id, ...resto } = dado;
+    const { error } = id
+      ? await supabase.from("crmriq_financeiro").update(resto).eq("id", id)
+      : await supabase.from("crmriq_financeiro").insert(resto);
+    if (error) return avisar("Não foi possível salvar o lançamento");
+    setModal(null);
+    avisar("Lançamento salvo");
+    carregar();
+  };
+
+  const excluirLancamento = async (id: string) => {
+    const { error } = await supabase.from("crmriq_financeiro").delete().eq("id", id);
+    avisar(error ? "Não foi possível excluir o lançamento" : "Lançamento excluído");
+    carregar();
+  };
+
+  const salvarPerfil = async (f: any) => {
+    const dado = { email: f.email.trim().toLowerCase(), nome: f.nome?.trim() || null, papel: f.papel, ativo: Boolean(f.ativo) };
+    const { error } = await supabase.from("crmriq_perfis").upsert(dado);
+    if (error) return avisar("Não foi possível atualizar o acesso");
+    setModal(null);
+    avisar("Acesso atualizado");
     carregar();
   };
 
@@ -390,15 +443,10 @@ export default function App() {
         </nav>
         <div className={(menuCompacto ? "px-2 text-center" : "px-4") + " py-4 font-mono border-t border-line"}>
           {podeExcluir && (
-            <button
-              onClick={() => setAba("auditoria")}
-              className={
-                "w-full text-left mb-4 border-l-2 px-3 py-2 text-[11px] uppercase tracking-widest transition-colors " +
-                (aba === "auditoria" ? "border-acc bg-panel2 text-white" : "border-transparent text-mut hover:text-white")
-              }
-            >
-              ◫ Auditoria
-            </button>
+            <div className="mb-4 space-y-1">
+              <button onClick={() => setAba("auditoria")} className={"w-full text-left border-l-2 px-3 py-2 text-[11px] uppercase tracking-widest transition-colors " + (aba === "auditoria" ? "border-acc bg-panel2 text-white" : "border-transparent text-mut hover:text-white")}>◫ Auditoria</button>
+              <button onClick={() => setAba("configuracoes")} className={"w-full text-left border-l-2 px-3 py-2 text-[11px] uppercase tracking-widest transition-colors " + (aba === "configuracoes" ? "border-acc bg-panel2 text-white" : "border-transparent text-mut hover:text-white")}>⚙ Acessos</button>
+            </div>
           )}
           <div className={(menuCompacto ? "hidden" : "") + " text-[10px] uppercase tracking-widest text-zinc-500"}>Conta logada</div>
           <div className={(menuCompacto ? "hidden" : "mt-1") + " text-[10px] uppercase tracking-widest text-acc"}>{podeExcluir ? "Administrador" : "Operador"}</div>
@@ -441,8 +489,9 @@ export default function App() {
         ) : (
           <div key={aba} className="page-enter">
             {aba === "painel" && (
-              <Painel clientes={clientes} pedidos={pedidos} produtos={produtos} nomeCliente={nomeCliente} onAgenda={() => setAba("agenda")} />
+              <Painel clientes={clientes} pedidos={pedidos} produtos={produtos} lancamentos={lancamentos} nomeCliente={nomeCliente} onAgenda={() => setAba("agenda")} />
             )}
+            {aba === "financeiro" && <Financeiro lancamentos={lancamentos} pedidos={pedidos} nomeCliente={nomeCliente} podeExcluir={podeExcluir} onNovo={() => setModal({ tipo: "lancamento" })} onEditar={(l: Lancamento) => setModal({ tipo: "lancamento", dado: l })} onExcluir={excluirLancamento} />}
             {aba === "clientes" && (
               <Clientes
                 clientes={clientes}
@@ -476,10 +525,11 @@ export default function App() {
             {aba === "produtos" && (
               <Produtos produtos={produtos} recarregar={carregar} avisar={avisar} podeExcluir={podeExcluir} />
             )}
-            {aba === "estoque" && <Estoque produtos={produtos} recarregar={carregar} avisar={avisar} />}
-            {aba === "producao" && <Producao pedidos={pedidos} produtos={produtos} />}
+            {aba === "estoque" && <Estoque produtos={produtos} movimentos={movimentos} recarregar={carregar} avisar={avisar} />}
+            {aba === "producao" && <Producao pedidos={pedidos} produtos={produtos} recarregar={carregar} avisar={avisar} />}
             {aba === "relatorios" && <Relatorios pedidos={pedidos} produtos={produtos} nomeCliente={nomeCliente} />}
             {aba === "auditoria" && podeExcluir && <Auditoria />}
+            {aba === "configuracoes" && podeExcluir && <Configuracoes perfis={perfis} onNovo={() => setModal({ tipo: "perfil" })} onEditar={(perfil: Perfil) => setModal({ tipo: "perfil", dado: perfil })} />}
           </div>
         )}
       </main>
@@ -498,6 +548,8 @@ export default function App() {
           onFechar={() => setModal(null)}
         />
       )}
+      {modal?.tipo === "lancamento" && <FormLancamento dado={modal.dado} pedidos={pedidos} nomeCliente={nomeCliente} onSalvar={salvarLancamento} onFechar={() => setModal(null)} />}
+      {modal?.tipo === "perfil" && <FormPerfil dado={modal.dado} onSalvar={salvarPerfil} onFechar={() => setModal(null)} />}
       {modal?.tipo === "aviso-pedido" && (
         <Modal titulo="Aviso" onFechar={() => setModal(null)} centralizado>
           <p className="text-sm text-zinc-300 leading-6">
@@ -528,7 +580,7 @@ export default function App() {
 }
 
 // ================= Painel =================
-function Painel({ clientes, pedidos, produtos, nomeCliente, onAgenda }: any) {
+function Painel({ clientes, pedidos, produtos, lancamentos, nomeCliente, onAgenda }: any) {
   const agora = new Date();
   const doMes = (t: string) => {
     const d = new Date(t);
@@ -574,6 +626,7 @@ function Painel({ clientes, pedidos, produtos, nomeCliente, onAgenda }: any) {
   });
   const maiorMes = Math.max(...meses.map((mes) => mes.valor), 1);
   const clientesRanking = clientes.map((cliente: Cliente) => ({ cliente, total: pedidos.filter((pedido: Pedido) => pedido.cliente_id === cliente.id).reduce((s: number, pedido: Pedido) => s + Number(pedido.total), 0) })).filter((linha) => linha.total > 0).sort((a, b) => b.total - a.total).slice(0, 5);
+  const saldoFinanceiro = lancamentos.filter((l: Lancamento) => l.pago_em).reduce((s: number, l: Lancamento) => s + (l.tipo === "receita" ? Number(l.valor) : -Number(l.valor)), 0);
 
   return (
     <div>
@@ -621,6 +674,8 @@ function Painel({ clientes, pedidos, produtos, nomeCliente, onAgenda }: any) {
           <div className="space-y-3 text-sm"><div className="flex justify-between"><span className="text-mut">Pedidos entregues</span><span className="font-mono">{porStatus("entregue")}</span></div><div className="flex justify-between"><span className="text-mut">Orçamentos em aberto</span><span className="font-mono">{porStatus("orcamento")}</span></div><div className="flex justify-between"><span className="text-mut">Entregas próximas</span><span className="font-mono">{entregasProximas.length}</span></div><div className="flex justify-between"><span className="text-mut">Clientes ativos</span><span className="font-mono">{clientesRanking.length}</span></div></div>
         </div>
       </div>
+
+      <div className="mt-4 bg-panel border border-line p-4 flex items-center justify-between gap-4"><div><h2 className="font-disp uppercase tracking-wide text-mut text-sm">Resultado financeiro realizado</h2><p className="text-xs text-mut mt-1">Receitas e despesas marcadas como pagas.</p></div><div className={(saldoFinanceiro >= 0 ? "text-emerald-300" : "text-red-300") + " font-mono text-2xl"}>{brl(saldoFinanceiro)}</div></div>
 
       {/* pipeline */}
       <div className="mt-8">
@@ -791,6 +846,7 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir, podeExcluir 
                 {c.obs && (
                   <div className="text-xs text-zinc-400 mt-2 border-t border-line pt-2">{c.obs}</div>
                 )}
+                {(c.limite_credito || c.endereco) && <div className="text-xs text-mut mt-2">{c.limite_credito ? `Limite: ${brl(Number(c.limite_credito))}` : ""}{c.limite_credito && c.endereco ? " · " : ""}{c.endereco && <a className="underline hover:text-white" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco)}`}>Ver no mapa</a>}</div>}
                 <div className="flex gap-2 mt-4 pt-3 border-t border-line items-center">
                   {tel && (
                     <a
@@ -830,8 +886,27 @@ function Clientes({ clientes, pedidos, onNovo, onEditar, onExcluir, podeExcluir 
   );
 }
 
+// ================= Financeiro e configuração =================
+function Financeiro({ lancamentos, pedidos, nomeCliente, podeExcluir, onNovo, onEditar, onExcluir }: any) {
+  const [filtro, setFiltro] = useState("todos");
+  const lista = lancamentos.filter((l: Lancamento) => filtro === "todos" || l.tipo === filtro || (filtro === "pendentes" && !l.pago_em));
+  const receitas = lancamentos.filter((l: Lancamento) => l.tipo === "receita" && l.pago_em).reduce((s: number, l: Lancamento) => s + Number(l.valor), 0);
+  const despesas = lancamentos.filter((l: Lancamento) => l.tipo === "despesa" && l.pago_em).reduce((s: number, l: Lancamento) => s + Number(l.valor), 0);
+  const pendente = lancamentos.filter((l: Lancamento) => !l.pago_em).reduce((s: number, l: Lancamento) => s + Number(l.valor) * (l.tipo === "receita" ? 1 : -1), 0);
+  const marcarPago = async (l: Lancamento) => {
+    await supabase.from("crmriq_financeiro").update({ pago_em: l.pago_em ? null : new Date().toISOString().slice(0, 10) }).eq("id", l.id);
+  };
+  return <div className="max-w-5xl"><div className="flex items-end justify-between gap-3 mb-6 flex-wrap"><div><h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Financeiro</h1><p className="text-sm text-mut mt-1">Contas a receber, despesas e resultado operacional.</p></div><Btn onClick={onNovo}>+ Novo lançamento</Btn></div><div className="grid sm:grid-cols-3 gap-3 mb-6"><ResumoFinanceiro label="Recebido" valor={receitas} cor="text-emerald-300" /><ResumoFinanceiro label="Despesas pagas" valor={despesas} cor="text-red-300" /><ResumoFinanceiro label="Resultado" valor={receitas - despesas} cor={receitas - despesas >= 0 ? "text-acc" : "text-red-300"} /></div><div className="flex gap-2 flex-wrap mb-4">{[["todos", "Todos"], ["receita", "Receitas"], ["despesa", "Despesas"], ["pendentes", `Pendentes ${brl(pendente)}`]].map(([id, label]) => <button key={id} onClick={() => setFiltro(id)} className={(filtro === id ? "bg-acc text-base border-acc" : "border-line text-mut hover:text-white") + " border px-3 py-1.5 text-xs font-disp uppercase"}>{label}</button>)}</div>{lista.length === 0 ? <Empty texto="Nenhum lançamento neste filtro. Registre receitas, despesas e contas a receber." acao={<Btn onClick={onNovo}>Novo lançamento</Btn>} /> : <div className="bg-panel border border-line divide-y divide-line">{lista.map((l: Lancamento) => <div key={l.id} className="px-4 py-3 flex gap-3 justify-between items-center flex-wrap"><div><div className="flex items-center gap-2"><span className={(l.tipo === "receita" ? "text-emerald-300" : "text-red-300") + " text-[10px] font-disp uppercase border border-current px-1.5 py-0.5"}>{l.tipo}</span><span className="text-sm text-white">{l.descricao}</span></div><div className="text-xs text-mut mt-1">{l.pago_em ? `Pago em ${new Date(l.pago_em + "T12:00").toLocaleDateString("pt-BR")}` : `Vence em ${new Date(l.vencimento + "T12:00").toLocaleDateString("pt-BR")}`}{l.pedido_id ? ` · ${nomeCliente(l.pedido_id && pedidos.find((p: Pedido) => p.id === l.pedido_id)?.cliente_id || "")}` : ""}</div></div><div className="flex gap-2 items-center"><span className="font-mono text-white">{brl(Number(l.valor))}</span><button onClick={() => marcarPago(l)} className="text-xs text-acc underline">{l.pago_em ? "Desfazer" : "Baixar"}</button><button onClick={() => onEditar(l)} className="text-xs text-mut underline">Editar</button>{podeExcluir && <button onClick={() => onExcluir(l.id)} className="text-xs text-red-400 underline">Excluir</button>}</div></div>)}</div>}</div>;
+}
+
+function ResumoFinanceiro({ label, valor, cor }: any) { return <div className="surface-card p-4"><div className="text-[11px] uppercase font-disp tracking-widest text-mut">{label}</div><div className={cor + " font-mono text-2xl mt-2"}>{brl(valor)}</div></div>; }
+
+function Configuracoes({ perfis, onNovo, onEditar }: any) {
+  return <div className="max-w-4xl"><div className="flex items-end justify-between gap-3 mb-6 flex-wrap"><div><h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Acessos</h1><p className="text-sm text-mut mt-1">Somente o administrador pode liberar ou desativar pessoas.</p></div><Btn onClick={onNovo}>+ Liberar e-mail</Btn></div><div className="bg-panel border border-line divide-y divide-line">{perfis.map((perfil: Perfil) => <div key={perfil.email} className="px-4 py-3 flex justify-between gap-3 items-center"><div><div className="text-sm text-white">{perfil.nome || "Sem nome"}</div><div className="text-xs font-mono text-mut mt-1">{perfil.email}</div></div><button onClick={() => onEditar(perfil)} className="text-right"><div className={(perfil.ativo ? "text-emerald-300" : "text-red-300") + " text-xs font-disp uppercase"}>{perfil.ativo ? perfil.papel : "Desativado"}</div><div className="text-xs text-mut underline mt-1">Editar acesso</div></button></div>)}</div></div>;
+}
+
 // ================= Estoque =================
-function Estoque({ produtos, recarregar, avisar }: any) {
+function Estoque({ produtos, movimentos, recarregar, avisar }: any) {
   const [edits, setEdits] = useState<Record<string, { atual?: string; minimo?: string }>>({});
 
   const salvar = async (produto: Produto) => {
@@ -844,6 +919,11 @@ function Estoque({ produtos, recarregar, avisar }: any) {
     if (error) {
       avisar("Não foi possível atualizar o estoque");
       return;
+    }
+    const novoAtual = Math.max(0, Number(edit.atual ?? produto.estoque_atual) || 0);
+    const diferenca = novoAtual - Number(produto.estoque_atual || 0);
+    if (diferenca !== 0) {
+      await supabase.from("crmriq_estoque_movimentos").insert({ produto_id: produto.id, tipo: diferenca > 0 ? "entrada" : "saida", quantidade: diferenca, motivo: "Ajuste manual pelo CRM" });
     }
     setEdits((atual: any) => {
       const proximo = { ...atual };
@@ -879,6 +959,7 @@ function Estoque({ produtos, recarregar, avisar }: any) {
           })}
         </div>
       )}
+      {movimentos.length > 0 && <div className="mt-6"><h2 className="font-disp text-sm uppercase text-mut mb-3">Últimas movimentações</h2><div className="bg-panel border border-line divide-y divide-line">{movimentos.slice(0, 8).map((movimento: MovimentoEstoque) => { const produto = produtos.find((p: Produto) => p.id === movimento.produto_id); return <div key={movimento.id} className="flex justify-between gap-3 px-4 py-3 text-sm"><div><span className={(movimento.quantidade > 0 ? "text-emerald-300" : "text-red-300") + " font-mono mr-3"}>{movimento.quantidade > 0 ? "+" : ""}{movimento.quantidade}</span>{produto?.nome || "Produto removido"}<div className="text-xs text-mut mt-1">{movimento.motivo || "Movimentação"}</div></div><time className="text-xs font-mono text-mut">{new Date(movimento.criado_em).toLocaleDateString("pt-BR")}</time></div>; })}</div></div>}
     </div>
   );
 }
@@ -1218,8 +1299,8 @@ function Produtos({ produtos, recarregar, avisar, podeExcluir }: any) {
 function FormCliente({ dado, onSalvar, onFechar }: any) {
   const [f, setF] = useState(
     dado
-      ? { id: dado.id, nome: dado.nome, telefone: dado.telefone || "", cidade: dado.cidade || "", tipo: dado.tipo || TIPOS_CLIENTE[0], obs: dado.obs || "" }
-      : { nome: "", telefone: "", cidade: "", tipo: TIPOS_CLIENTE[0], obs: "" }
+      ? { id: dado.id, nome: dado.nome, telefone: dado.telefone || "", cidade: dado.cidade || "", tipo: dado.tipo || TIPOS_CLIENTE[0], obs: dado.obs || "", limite_credito: dado.limite_credito || "", endereco: dado.endereco || "" }
+      : { nome: "", telefone: "", cidade: "", tipo: TIPOS_CLIENTE[0], obs: "", limite_credito: "", endereco: "" }
   );
   const ok = f.nome.trim().length > 0;
 
@@ -1243,6 +1324,7 @@ function FormCliente({ dado, onSalvar, onFechar }: any) {
           </select>
         </Field>
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Limite de crédito"><input type="number" min="0" step="0.01" className={inp} value={f.limite_credito} onChange={(e) => setF({ ...f, limite_credito: e.target.value })} /></Field><Field label="Endereço"><input className={inp} value={f.endereco} onChange={(e) => setF({ ...f, endereco: e.target.value })} /></Field></div>
       <Field label="Observações">
         <textarea className={inp} rows={2} value={f.obs} onChange={(e) => setF({ ...f, obs: e.target.value })} />
       </Field>
@@ -1257,12 +1339,16 @@ function FormCliente({ dado, onSalvar, onFechar }: any) {
 function FormPedido({ dado, statusInicial = "orcamento", clientes, produtos, onSalvar, onFechar }: any) {
   const [f, setF] = useState(
     dado
-      ? { id: dado.id, cliente_id: dado.cliente_id, itens: dado.itens, status: dado.status, data_entrega: dado.data_entrega || "" }
+      ? { id: dado.id, cliente_id: dado.cliente_id, itens: dado.itens, status: dado.status, data_entrega: dado.data_entrega || "", forma_pagamento: dado.forma_pagamento || "", desconto: dado.desconto || "", frete: dado.frete || "", observacao: dado.observacao || "" }
       : {
           cliente_id: clientes[0]?.id || "",
           itens: [],
           status: statusInicial,
           data_entrega: "",
+          forma_pagamento: "",
+          desconto: "",
+          frete: "",
+          observacao: "",
         }
   );
 
@@ -1354,10 +1440,16 @@ function FormPedido({ dado, statusInicial = "orcamento", clientes, produtos, onS
           <input type="date" className={inp} value={f.data_entrega} onChange={(e) => setF({ ...f, data_entrega: e.target.value })} />
         </Field>
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Field label="Pagamento"><input className={inp} value={f.forma_pagamento} placeholder="Ex.: Pix" onChange={(e) => setF({ ...f, forma_pagamento: e.target.value })} /></Field>
+        <Field label="Desconto"><input type="number" min="0" step="0.01" className={inp} value={f.desconto} onChange={(e) => setF({ ...f, desconto: e.target.value })} /></Field>
+        <Field label="Frete"><input type="number" min="0" step="0.01" className={inp} value={f.frete} onChange={(e) => setF({ ...f, frete: e.target.value })} /></Field>
+      </div>
+      <Field label="Observações"><textarea className={inp} rows={2} value={f.observacao} onChange={(e) => setF({ ...f, observacao: e.target.value })} /></Field>
 
       <div className="flex justify-between items-center bg-panel2 border border-line px-4 py-3 mt-2">
         <span className="text-[11px] font-disp uppercase tracking-widest text-mut">Total</span>
-        <span className="font-mono text-xl text-white">{brl(total)}</span>
+        <span className="font-mono text-xl text-white">{brl(Math.max(0, total - Number(f.desconto || 0) + Number(f.frete || 0)))}</span>
       </div>
 
       <div className="flex justify-end gap-2 mt-4">
@@ -1366,4 +1458,14 @@ function FormPedido({ dado, statusInicial = "orcamento", clientes, produtos, onS
       </div>
     </Modal>
   );
+}
+
+function FormLancamento({ dado, pedidos, nomeCliente, onSalvar, onFechar }: any) {
+  const [f, setF] = useState(dado ? { ...dado, valor: String(dado.valor), pago_em: dado.pago_em || "", pedido_id: dado.pedido_id || "", obs: dado.obs || "" } : { tipo: "receita", descricao: "", valor: "", vencimento: new Date().toISOString().slice(0, 10), pago_em: "", pedido_id: "", obs: "" });
+  return <Modal titulo={dado ? "Editar lançamento" : "Novo lançamento"} onFechar={onFechar}><div className="grid grid-cols-2 gap-3"><Field label="Tipo"><select className={inp} value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })}><option value="receita">Receita</option><option value="despesa">Despesa</option></select></Field><Field label="Valor *"><input type="number" min="0.01" step="0.01" className={inp} value={f.valor} onChange={(e) => setF({ ...f, valor: e.target.value })} /></Field></div><Field label="Descrição *"><input className={inp} value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} autoFocus /></Field><div className="grid grid-cols-2 gap-3"><Field label="Vencimento"><input type="date" className={inp} value={f.vencimento} onChange={(e) => setF({ ...f, vencimento: e.target.value })} /></Field><Field label="Pago em"><input type="date" className={inp} value={f.pago_em} onChange={(e) => setF({ ...f, pago_em: e.target.value })} /></Field></div><Field label="Vincular a pedido"><select className={inp} value={f.pedido_id} onChange={(e) => setF({ ...f, pedido_id: e.target.value })}><option value="">Nenhum</option>{pedidos.map((p: Pedido) => <option key={p.id} value={p.id}>{nomeCliente(p.cliente_id)} · {brl(Number(p.total))}</option>)}</select></Field><Field label="Observações"><textarea rows={2} className={inp} value={f.obs} onChange={(e) => setF({ ...f, obs: e.target.value })} /></Field><div className="flex justify-end gap-2 mt-4"><Btn variant="ghost" onClick={onFechar}>Cancelar</Btn><Btn disabled={!f.descricao.trim() || Number(f.valor) <= 0} onClick={() => onSalvar(f)}>Salvar</Btn></div></Modal>;
+}
+
+function FormPerfil({ dado, onSalvar, onFechar }: any) {
+  const [f, setF] = useState(dado ? { ...dado } : { email: "", nome: "", papel: "operador", ativo: true });
+  return <Modal titulo={dado ? "Editar acesso" : "Liberar acesso"} onFechar={onFechar}><Field label="E-mail *"><input type="email" className={inp} value={f.email} disabled={Boolean(dado)} onChange={(e) => setF({ ...f, email: e.target.value })} autoFocus /></Field><Field label="Nome"><input className={inp} value={f.nome || ""} onChange={(e) => setF({ ...f, nome: e.target.value })} /></Field><Field label="Nível"><select className={inp} value={f.papel} onChange={(e) => setF({ ...f, papel: e.target.value })}><option value="operador">Operador</option><option value="administrador">Administrador</option></select></Field><label className="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} />Acesso ativo</label><div className="flex justify-end gap-2 mt-5"><Btn variant="ghost" onClick={onFechar}>Cancelar</Btn><Btn disabled={!f.email.trim()} onClick={() => onSalvar(f)}>Salvar</Btn></div></Modal>;
 }
