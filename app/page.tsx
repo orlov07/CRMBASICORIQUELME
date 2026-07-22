@@ -189,11 +189,6 @@ export default function App() {
       setModal({ tipo: "aviso-pedido" });
       return;
     }
-    if (produtos.length === 0) {
-      setAba("produtos");
-      avisar("Cadastre um produto primeiro");
-      return;
-    }
     setModal({ tipo: "pedido", statusInicial });
   };
 
@@ -547,7 +542,7 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
   const [filtro, setFiltro] = useState("todos");
   const [confirmar, setConfirmar] = useState<string | null>(null);
   const lista = pedidos.filter((p: Pedido) => filtro === "todos" || p.status === filtro);
-  const podeCriarPedido = clientes.length > 0 && produtos.length > 0;
+  const podeCriarPedido = clientes.length > 0;
   const etapa = STATUS.find((s) => s.id === filtro);
   const statusInicial = etapa?.id || "orcamento";
   const nomeAcao = etapa?.id === "orcamento" ? "Novo orçamento" : etapa ? `Novo pedido — ${etapa.label}` : "Novo pedido";
@@ -583,7 +578,7 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
           texto={
             clientes.length === 0
               ? "Cadastre um cliente primeiro na aba Clientes para criar pedidos."
-              : "Cadastre um produto primeiro na aba Produtos para criar pedidos."
+              : ""
           }
           acao={<Btn onClick={() => onNovo(statusInicial)}>+ {nomeAcao}</Btn>}
         />
@@ -820,7 +815,7 @@ function FormPedido({ dado, statusInicial = "orcamento", clientes, produtos, onS
       ? { id: dado.id, cliente_id: dado.cliente_id, itens: dado.itens, status: dado.status, data_entrega: dado.data_entrega || "" }
       : {
           cliente_id: clientes[0]?.id || "",
-          itens: [{ produto_id: produtos[0]?.id || "", qtd: 100 }],
+          itens: [],
           status: statusInicial,
           data_entrega: "",
         }
@@ -838,7 +833,7 @@ function FormPedido({ dado, statusInicial = "orcamento", clientes, produtos, onS
   const setItem = (i: number, patch: any) =>
     setF({ ...f, itens: f.itens.map((it: Item, j: number) => (j === i ? { ...it, ...patch } : it)) });
 
-  const ok = f.cliente_id && f.itens.some((it: Item) => Number(it.qtd) > 0);
+  const ok = f.cliente_id;
 
   return (
     <Modal titulo={dado ? "Editar pedido" : statusInicial === "orcamento" ? "Novo orçamento" : `Novo pedido — ${STATUS.find((s) => s.id === statusInicial)?.label || ""}`} onFechar={onFechar}>
@@ -883,14 +878,21 @@ function FormPedido({ dado, statusInicial = "orcamento", clientes, produtos, onS
             )}
           </div>
         ))}
-        <button
-          onClick={() =>
-            setF({ ...f, itens: [...f.itens, { produto_id: produtos[0]?.id || "", qtd: 100 }] })
-          }
-          className="text-xs font-disp uppercase text-acc hover:text-amber-300"
-        >
-          + adicionar item
-        </button>
+        {f.itens.length === 0 && (
+          <p className="text-sm text-mut py-2">Nenhum produto adicionado. Você pode salvar o orçamento e incluir os itens depois.</p>
+        )}
+        {produtos.length > 0 ? (
+          <button
+            onClick={() =>
+              setF({ ...f, itens: [...f.itens, { produto_id: produtos[0].id, qtd: 100 }] })
+            }
+            className="text-xs font-disp uppercase text-acc hover:text-amber-300"
+          >
+            + adicionar item
+          </button>
+        ) : (
+          <p className="text-xs text-zinc-500">Cadastre produtos quando quiser adicionar itens ao orçamento.</p>
+        )}
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
