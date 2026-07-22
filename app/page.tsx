@@ -184,7 +184,7 @@ export default function App() {
     carregar();
   };
 
-  const novoPedido = () => {
+  const novoPedido = (statusInicial = "orcamento") => {
     if (clientes.length === 0) {
       setModal({ tipo: "aviso-pedido" });
       return;
@@ -194,7 +194,7 @@ export default function App() {
       avisar("Cadastre um produto primeiro");
       return;
     }
-    setModal({ tipo: "pedido" });
+    setModal({ tipo: "pedido", statusInicial });
   };
 
   if (!authPronta || (configurado && sessao && carregando)) {
@@ -331,6 +331,7 @@ export default function App() {
       {modal?.tipo === "pedido" && (
         <FormPedido
           dado={modal.dado}
+          statusInicial={modal.statusInicial}
           clientes={clientes}
           produtos={produtos}
           onSalvar={salvarPedido}
@@ -547,13 +548,16 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
   const [confirmar, setConfirmar] = useState<string | null>(null);
   const lista = pedidos.filter((p: Pedido) => filtro === "todos" || p.status === filtro);
   const podeCriarPedido = clientes.length > 0 && produtos.length > 0;
+  const etapa = STATUS.find((s) => s.id === filtro);
+  const statusInicial = etapa?.id || "orcamento";
+  const nomeAcao = etapa?.id === "orcamento" ? "Novo orçamento" : etapa ? `Novo pedido — ${etapa.label}` : "Novo pedido";
 
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="font-disp text-2xl font-bold uppercase tracking-wide">Pedidos</h1>
-        <Btn onClick={onNovo}>
-          + Novo pedido
+        <Btn onClick={() => onNovo(statusInicial)}>
+          + {nomeAcao}
         </Btn>
       </div>
 
@@ -581,10 +585,10 @@ function Pedidos({ pedidos, produtos, clientes, nomeCliente, onNovo, onEditar, o
               ? "Cadastre um cliente primeiro na aba Clientes para criar pedidos."
               : "Cadastre um produto primeiro na aba Produtos para criar pedidos."
           }
-          acao={<Btn onClick={onNovo}>+ Novo pedido</Btn>}
+          acao={<Btn onClick={() => onNovo(statusInicial)}>+ {nomeAcao}</Btn>}
         />
       ) : lista.length === 0 ? (
-        <Empty texto="Nenhum pedido nesse filtro." />
+        <Empty texto={etapa ? `Nenhum pedido em ${etapa.label.toLowerCase()}.` : "Nenhum pedido cadastrado ainda."} acao={<Btn onClick={() => onNovo(statusInicial)}>+ {nomeAcao}</Btn>} />
       ) : (
         <div className="space-y-3">
           {lista.map((p: Pedido) => (
@@ -810,14 +814,14 @@ function FormCliente({ dado, onSalvar, onFechar }: any) {
   );
 }
 
-function FormPedido({ dado, clientes, produtos, onSalvar, onFechar }: any) {
+function FormPedido({ dado, statusInicial = "orcamento", clientes, produtos, onSalvar, onFechar }: any) {
   const [f, setF] = useState(
     dado
       ? { id: dado.id, cliente_id: dado.cliente_id, itens: dado.itens, status: dado.status, data_entrega: dado.data_entrega || "" }
       : {
           cliente_id: clientes[0]?.id || "",
           itens: [{ produto_id: produtos[0]?.id || "", qtd: 100 }],
-          status: "orcamento",
+          status: statusInicial,
           data_entrega: "",
         }
   );
@@ -837,7 +841,7 @@ function FormPedido({ dado, clientes, produtos, onSalvar, onFechar }: any) {
   const ok = f.cliente_id && f.itens.some((it: Item) => Number(it.qtd) > 0);
 
   return (
-    <Modal titulo={dado ? "Editar pedido" : "Novo pedido"} onFechar={onFechar}>
+    <Modal titulo={dado ? "Editar pedido" : statusInicial === "orcamento" ? "Novo orçamento" : `Novo pedido — ${STATUS.find((s) => s.id === statusInicial)?.label || ""}`} onFechar={onFechar}>
       <Field label="Cliente">
         <select className={inp} value={f.cliente_id} onChange={(e) => setF({ ...f, cliente_id: e.target.value })}>
           {clientes.map((c: Cliente) => (
