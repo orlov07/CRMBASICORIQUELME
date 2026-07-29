@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PwaInstall } from "@/components/pwa-install";
 import { PwaRegistration } from "@/components/pwa-registration";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body className="font-body bg-base text-zinc-100 antialiased">
         <PwaRegistration />
+        <PwaInstall />
         {children}
       </body>
     </html>

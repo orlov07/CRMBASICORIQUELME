@@ -35,6 +35,10 @@ O mesmo codigo gera as duas versoes:
 
 O aplicativo desktop inicia uma copia local segura do CRM e continua usando o mesmo Supabase; por isso, os dados permanecem sincronizados com a versao web. Para o login Google funcionar no executavel, inclua `http://127.0.0.1:3210` na lista **Redirect URLs** de Authentication -> URL Configuration no Supabase. Para desenvolvimento desktop, inclua tambem `http://localhost:3000`.
 
+## Instalar como aplicativo (PWA)
+
+Na versão web publicada em HTTPS, o botão **Instalar aplicativo** aparece quando o navegador permite a instalação. Ele cria um atalho que abre o CRM como aplicativo. No iPhone/iPad, abra no Safari e use **Compartilhar -> Adicionar à Tela de Início**.
+
 ## Login com Google
 
 Parametros esperados no ambiente:
