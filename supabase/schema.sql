@@ -201,9 +201,13 @@ create table if not exists public.crmriq_perfis (
 
 insert into public.crmriq_perfis (email, nome, papel, ativo) values
   ('igoraguiarviana@gmail.com', 'Igor Aguiar Viana', 'administrador', true),
+  ('krgblocos@gmail.com', 'KRG Blocos', 'administrador', true),
   ('igor.vianaaidev@gmail.com', 'Igor Viana AI Dev', 'operador', true),
   ('techbilld@gmail.com', 'TechBild', 'operador', true)
-on conflict (email) do nothing;
+on conflict (email) do update set
+  nome = excluded.nome,
+  papel = excluded.papel,
+  ativo = excluded.ativo;
 
 create or replace function public.crmriq_eh_autorizado()
 returns boolean language sql stable security definer set search_path = public, pg_temp

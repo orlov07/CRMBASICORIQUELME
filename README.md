@@ -19,7 +19,9 @@ Tabelas principais: `crmriq_clientes`, `crmriq_pedidos`, `crmriq_produtos`, `crm
 
 No painel do Supabase, abra **SQL Editor -> New query**, cole o conteúdo completo de `supabase/schema.sql` e clique em **Run**. O script pode ser executado novamente: ele atualiza as tabelas, permissões, auditoria e atualização em tempo real.
 
-Após esta versão, executar o SQL é obrigatório para ativar Financeiro, Movimentações de Estoque e a gestão de acessos. O primeiro administrador é `igoraguiarviana@gmail.com`; ele pode liberar ou desativar os demais usuários na aba **Acessos**.
+Após esta versão, executar o SQL é obrigatório para ativar Financeiro, Movimentações de Estoque e a gestão de acessos. Os administradores iniciais são `igoraguiarviana@gmail.com` e `krgblocos@gmail.com`; eles podem liberar ou desativar os demais usuários na aba **Acessos**.
+
+Se a conta `krgblocos@gmail.com` já existir como operador, execute também `supabase/promover-krgblocos-admin.sql` no SQL Editor. Em seguida, saia e entre novamente no CRM para atualizar a sessão.
 
 ## Web e aplicativo Windows
 

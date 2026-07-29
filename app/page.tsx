@@ -60,7 +60,6 @@ const NAV = [
   return ordem.indexOf(a.id) - ordem.indexOf(b.id);
 });
 
-const EMAIL_ADMINISTRADOR = "igoraguiarviana@gmail.com";
 const GRUPOS_NAVEGACAO = [
   { titulo: "Visão geral", ids: ["painel", "financeiro", "relatorios"] },
   { titulo: "Operação", ids: ["pedidos", "agenda", "producao", "estoque"] },
@@ -105,7 +104,11 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [menuCompacto, setMenuCompacto] = useState(false);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
-  const podeExcluir = sessao?.user?.email?.toLowerCase() === EMAIL_ADMINISTRADOR;
+  const emailLogado = sessao?.user?.email?.trim().toLowerCase();
+  // A permissao vem do perfil salvo no Supabase, nao de um e-mail fixo no app.
+  const podeExcluir = Boolean(
+    emailLogado && perfis.some((perfil) => perfil.email === emailLogado && perfil.ativo && perfil.papel === "administrador")
+  );
   const tituloAba = (NAV.find((item) => item.id === aba)?.label || (aba === "auditoria" ? "Auditoria" : aba === "configuracoes" ? "Configurações" : "CRM"));
 
   const avisar = (t: string) => {
@@ -342,8 +345,15 @@ export default function App() {
 
   const salvarPerfil = async (f: any) => {
     const dado = { email: f.email.trim().toLowerCase(), nome: f.nome?.trim() || null, papel: f.papel, ativo: Boolean(f.ativo) };
+    if (!/^\S+@\S+\.\S+$/.test(dado.email)) {
+      avisar("Informe um e-mail válido");
+      return;
+    }
     const { error } = await supabase.from("crmriq_perfis").upsert(dado);
-    if (error) return avisar("Não foi possível atualizar o acesso");
+    if (error) {
+      console.error("Erro ao salvar acesso:", error);
+      return avisar(`Não foi possível salvar o acesso: ${error.message}`);
+    }
     setModal(null);
     avisar("Acesso atualizado");
     carregar();
