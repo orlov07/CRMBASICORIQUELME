@@ -292,7 +292,9 @@ export default function App() {
   };
 
   const excluirCliente = async (id: string) => {
-    await supabase.from("crmriq_clientes").delete().eq("id", id);
+    if (!podeExcluir) return avisar("Somente administradores podem excluir clientes");
+    const { error } = await supabase.from("crmriq_clientes").delete().eq("id", id);
+    if (error) return avisar(`Não foi possível excluir o cliente: ${error.message}`);
     avisar("Cliente excluído");
     carregar();
   };
@@ -320,7 +322,9 @@ export default function App() {
   };
 
   const excluirPedido = async (id: string) => {
-    await supabase.from("crmriq_pedidos").delete().eq("id", id);
+    if (!podeExcluir) return avisar("Somente administradores podem excluir pedidos");
+    const { error } = await supabase.from("crmriq_pedidos").delete().eq("id", id);
+    if (error) return avisar(`Não foi possível excluir o pedido: ${error.message}`);
     avisar("Pedido excluído");
     carregar();
   };
@@ -338,6 +342,7 @@ export default function App() {
   };
 
   const excluirLancamento = async (id: string) => {
+    if (!podeExcluir) return avisar("Somente administradores podem excluir lançamentos");
     const { error } = await supabase.from("crmriq_financeiro").delete().eq("id", id);
     avisar(error ? "Não foi possível excluir o lançamento" : "Lançamento excluído");
     carregar();
@@ -1218,7 +1223,9 @@ function Produtos({ produtos, recarregar, avisar, podeExcluir }: any) {
   };
 
   const excluir = async (id: string) => {
-    await supabase.from("crmriq_produtos").delete().eq("id", id);
+    if (!podeExcluir) return avisar("Somente administradores podem excluir produtos");
+    const { error } = await supabase.from("crmriq_produtos").delete().eq("id", id);
+    if (error) return avisar(`Não foi possível excluir o produto: ${error.message}`);
     recarregar();
   };
 

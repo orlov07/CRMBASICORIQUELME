@@ -23,6 +23,8 @@ Após esta versão, executar o SQL é obrigatório para ativar Financeiro, Movim
 
 Se a conta `krgblocos@gmail.com` já existir como operador, execute também `supabase/promover-krgblocos-admin.sql` no SQL Editor. Em seguida, saia e entre novamente no CRM para atualizar a sessão.
 
+Para aplicar ou revisar a proteção de exclusões no banco já em produção, execute `supabase/proteger-exclusoes-admin.sql`. Operadores podem consultar, cadastrar e alterar registros, mas somente administradores podem excluir pedidos, clientes, produtos, lançamentos financeiros, movimentos de estoque, comprovantes e perfis.
+
 ## Web e aplicativo Windows
 
 O mesmo codigo gera as duas versoes:
